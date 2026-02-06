@@ -586,3 +586,99 @@ class TestGameState:
         """Test game result returns None for ongoing game."""
         game = ChessGame()
         assert game.get_game_result() is None
+
+
+class TestPromotedPieceMoves:
+    """Test suite for moves of promoted pieces."""
+
+    def test_promoted_queen_has_queen_moves(self):
+        """Test that a promoted queen can move like a queen."""
+        game = ChessGame()
+        game.board.clear()
+        # Set up white pawn about to promote
+        game.board[Position.from_algebraic("e7")] = Piece(PieceType.PAWN, Color.WHITE, has_moved=True)
+        game.current_turn = Color.WHITE
+
+        # Promote pawn to queen
+        game.make_move(
+            Position.from_algebraic("e7"),
+            Position.from_algebraic("e8"),
+            promotion_piece_type=PieceType.QUEEN
+        )
+
+        # Verify the piece is actually a queen now
+        promoted_piece = game.get_piece(Position.from_algebraic("e8"))
+        assert promoted_piece is not None
+        assert promoted_piece.piece_type == PieceType.QUEEN, f"Expected QUEEN but got {promoted_piece.piece_type}"
+
+        # Switch back to white's turn to test the promoted queen
+        game.current_turn = Color.WHITE
+
+        # Check that the promoted queen has queen moves
+        moves = game.get_possible_moves(Position.from_algebraic("e8"))
+
+        # A queen on e8 should have many moves available
+        # At minimum, it should be able to move to e7, e6, d8, f8, etc.
+        assert len(moves) > 0, "Promoted queen should have moves available"
+
+        # Specifically check for some expected queen moves
+        assert Position.from_algebraic("e7") in moves, "Queen should be able to move to e7"
+        assert Position.from_algebraic("e1") in moves, "Queen should be able to move to e1"
+        assert Position.from_algebraic("a8") in moves, "Queen should be able to move to a8"
+        assert Position.from_algebraic("h8") in moves, "Queen should be able to move to h8"
+
+    def test_promoted_piece_moves_after_full_game_sequence(self):
+        """Test that a promoted piece can move after a realistic game sequence."""
+        game = ChessGame()
+
+        # Move a white pawn from starting position to promotion (simpler approach)
+        # Clear the board and set up a scenario where white can promote
+        game.board.clear()
+        game.board[Position.from_algebraic("a7")] = Piece(PieceType.PAWN, Color.WHITE, has_moved=True)
+        game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+        game.current_turn = Color.WHITE
+
+        # Promote the pawn
+        assert game.make_move(Position.from_algebraic("a7"), Position.from_algebraic("a8"))
+
+        # Verify the piece is a queen
+        promoted_piece = game.get_piece(Position.from_algebraic("a8"))
+        assert promoted_piece is not None
+        assert promoted_piece.piece_type == PieceType.QUEEN, f"Expected QUEEN but got {promoted_piece.piece_type}"
+
+        # It's now black's turn, so let black make a move (just move the king)
+        assert game.make_move(Position.from_algebraic("e8"), Position.from_algebraic("e7"))
+
+        # Now it's white's turn again - the promoted queen should be able to move
+        moves = game.get_possible_moves(Position.from_algebraic("a8"))
+        assert len(moves) > 0, "Promoted queen should have moves available on next turn"
+
+        # Verify queen can actually move
+        assert game.make_move(Position.from_algebraic("a8"), Position.from_algebraic("a7")), "Queen should be able to move"
+
+    def test_promoted_piece_with_string_promotion_type_fails(self):
+        """Test that promotion with a string instead of PieceType enum causes wrong piece type."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("a7")] = Piece(PieceType.PAWN, Color.WHITE, has_moved=True)
+        game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+        game.current_turn = Color.WHITE
+
+        # Try to promote with a string (simulating incorrect usage)
+        # This demonstrates the bug - when string is passed instead of enum
+        assert game.make_move(Position.from_algebraic("a7"), Position.from_algebraic("a8"), promotion_piece_type="queen")
+
+        # The piece will be created with string type instead of enum
+        promoted_piece = game.get_piece(Position.from_algebraic("a8"))
+        assert promoted_piece is not None
+        # This shows the bug - piece_type is a string, not an enum
+        assert promoted_piece.piece_type == "queen", f"Bug demonstration: piece type is {promoted_piece.piece_type}"
+        assert promoted_piece.piece_type != PieceType.QUEEN, "This shows the bug - types don't match"
+
+        # Because piece_type is a string, it won't match any enum checks in get_possible_moves
+        game.current_turn = Color.WHITE
+        moves = game.get_possible_moves(Position.from_algebraic("a8"))
+        # This is the bug - no moves because piece_type doesn't match any checks
+        assert len(moves) == 0, "Bug: promoted piece has no moves because piece_type is a string"

@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import List, Dict, Optional
 import uuid
 import json
-from chess_game import ChessGame, Color, Position
+from chess_game import ChessGame, Color, Position, PieceType
 
 app = FastAPI()
 
@@ -27,19 +27,34 @@ class Room:
         """Broadcast the current board state to all players as a structured JSON object."""
         # Send personalized board state to each player with their color
         for player, color in [(self.player1, Color.WHITE), (self.player2, Color.BLACK)]:
+            # Create a snapshot of the board to avoid dictionary modification during iteration
+            board_snapshot = list(self.game.board.items())
+
             board_state = {
                 "type": "board_state",
                 "board": {
                     f"{pos.row},{pos.col}": {
-                        "piece_type": piece.piece_type.value,
+                        "piece_type": piece.piece_type.value if hasattr(piece.piece_type, 'value') else piece.piece_type,
                         "color": piece.color.value
                     }
-                    for pos, piece in self.game.board.items()
+                    for pos, piece in board_snapshot
                 },
                 "current_turn": self.game.current_turn.value,
                 "room_id": self.id,
                 "player_color": color.value
             }
+
+            # Add available moves for the player whose turn it is
+            if color == self.game.current_turn:
+                available_moves = {}
+                for pos, piece in board_snapshot:
+                    if piece.color == color:
+                        moves = self.game.get_possible_moves(pos)
+                        if moves:
+                            available_moves[f"{pos.row},{pos.col}"] = [
+                                {"row": move.row, "col": move.col} for move in moves
+                            ]
+                board_state["available_moves"] = available_moves
 
             message = json.dumps(board_state)
             try:
@@ -161,7 +176,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 try:
                     from_pos = Position(message["from"]["row"], message["from"]["col"])
                     to_pos = Position(message["to"]["row"], message["to"]["col"])
-                    promotion = message.get("promotion")  # Optional promotion piece type
+                    promotion_str = message.get("promotion")  # Optional promotion piece type
+
+                    # Convert string promotion type to PieceType enum
+                    promotion = None
+                    if promotion_str:
+                        try:
+                            promotion = PieceType(promotion_str)
+                        except ValueError:
+                            await websocket.send_text(json.dumps({
+                                "type": "error",
+                                "message": f"Invalid promotion type: {promotion_str}"
+                            }))
+                            continue
                 except (KeyError, TypeError):
                     await websocket.send_text(json.dumps({
                         "type": "error",

@@ -10,6 +10,11 @@ function renderBoard(boardState, selectedSquare, onSquareClick) {
   const squareSize = 60 // Size of each square in pixels
   const isBlack = boardState.player_color === 'black'
 
+  // Get available moves for the selected piece
+  const availableMoves = selectedSquare && boardState.available_moves
+    ? boardState.available_moves[`${selectedSquare.row},${selectedSquare.col}`] || []
+    : []
+
   return (
     <svg
       width={squareSize * 8}
@@ -33,6 +38,14 @@ function renderBoard(boardState, selectedSquare, onSquareClick) {
           // Highlight selected square
           if (selectedSquare && selectedSquare.row === boardRow && selectedSquare.col === boardCol) {
             fillColor = '#7fc97f'
+          }
+
+          // Highlight available move squares
+          const isAvailableMove = availableMoves.some(
+            move => move.row === boardRow && move.col === boardCol
+          )
+          if (isAvailableMove) {
+            fillColor = '#baca44'
           }
 
           return (
@@ -79,28 +92,41 @@ function renderBoard(boardState, selectedSquare, onSquareClick) {
 function App() {
   const [boardState, setBoardState] = useState(null)
   const [selectedSquare, setSelectedSquare] = useState(null) // { row, col } or null
+  const [gameState, setGameState] = useState('landing') // 'landing', 'queue', 'playing'
+  const [promotionPending, setPromotionPending] = useState(null) // { from, to } or null
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
 
   const handleSquareClick = (row, col) => {
     if (!selectedSquare) {
-      // First click: select the piece
-      setSelectedSquare({ row, col })
+      // First click: select the piece only if it belongs to the player and has available moves
+      const pieceKey = `${row},${col}`
+      const piece = boardState?.board[pieceKey]
+
+      // Only select if it's the player's piece and it has available moves
+      if (piece && piece.color === boardState.player_color && boardState.available_moves?.[pieceKey]?.length > 0) {
+        setSelectedSquare({ row, col })
+      }
     } else {
       // Second click: attempt to move
+      const pieceKey = `${selectedSquare.row},${selectedSquare.col}`
+      const piece = boardState?.board[pieceKey]
+
+      // Check if this is a pawn promotion (pawn reaching last rank)
+      if (piece?.piece_type === 'pawn' && (row === 0 || row === 7)) {
+        // Show promotion dialog
+        setPromotionPending({
+          from: { row: selectedSquare.row, col: selectedSquare.col },
+          to: { row, col }
+        })
+        setSelectedSquare(null)
+        return
+      }
+
       const moveData = {
         type: 'move',
         from: { row: selectedSquare.row, col: selectedSquare.col },
         to: { row, col }
-      }
-
-      // Check if this is a pawn promotion (pawn reaching last rank)
-      const pieceKey = `${selectedSquare.row},${selectedSquare.col}`
-      const piece = boardState?.board[pieceKey]
-
-      if (piece?.piece_type === 'pawn' && (row === 0 || row === 7)) {
-        // Simple promotion - default to queen for now
-        moveData.promotion = 'queen'
       }
 
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -115,59 +141,68 @@ function App() {
     }
   }
 
+  const handlePromotion = (pieceType) => {
+    if (!promotionPending) return
 
-  useEffect(() => {
-    let isMounted = true
+    const moveData = {
+      type: 'move',
+      from: promotionPending.from,
+      to: promotionPending.to,
+      promotion: pieceType
+    }
 
-    const connect = () => {
-      if (!isMounted) return
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(moveData))
+      console.log('Move sent:', moveData)
+    } else {
+      alert('WebSocket is not connected')
+    }
 
-      const websocket = new WebSocket('ws://localhost:8000/ws')
-      wsRef.current = websocket
+    setPromotionPending(null)
+  }
 
-      websocket.onopen = () => {
-        if (!isMounted) return
-        console.log('WebSocket connected')
-      }
+  const handlePlayClick = () => {
+    setGameState('queue')
+    connect()
+  }
 
-      websocket.onmessage = (event) => {
-        if (!isMounted) return
-        console.log('Message received:', event.data)
+  const connect = () => {
+    const websocket = new WebSocket('ws://localhost:8000/ws')
+    wsRef.current = websocket
 
-        try {
-          const data = JSON.parse(event.data)
-          if (data.type === 'board_state') {
-            setBoardState(data)
-          }
-        } catch (e) {
-          // Ignore non-JSON messages
+    websocket.onopen = () => {
+      console.log('WebSocket connected')
+    }
+
+    websocket.onmessage = (event) => {
+      console.log('Message received:', event.data)
+
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'board_state') {
+          setBoardState(data)
+          setGameState('playing')
         }
-      }
-
-      websocket.onerror = (error) => {
-        if (!isMounted) return
-        console.error('WebSocket error:', error)
-      }
-
-      websocket.onclose = () => {
-        if (!isMounted) return
-        console.log('WebSocket disconnected')
-
-        // Attempt to reconnect after 3 seconds
-        reconnectTimeoutRef.current = setTimeout(() => {
-          if (isMounted) {
-            console.log('Attempting to reconnect...')
-            connect()
-          }
-        }, 3000)
+      } catch (e) {
+        // Text message (e.g., "Waiting for opponent...")
+        // Stay in queue state
       }
     }
 
-    connect()
+    websocket.onerror = (error) => {
+      console.error('WebSocket error:', error)
+    }
 
+    websocket.onclose = () => {
+      console.log('WebSocket disconnected')
+      setGameState('landing')
+      setBoardState(null)
+    }
+  }
+
+  useEffect(() => {
     // Cleanup on unmount
     return () => {
-      isMounted = false
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
       }
@@ -178,13 +213,153 @@ function App() {
   }, [])
 
   return (
-    <>
-      {boardState && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-          {renderBoard(boardState, selectedSquare, handleSquareClick)}
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
+    }}>
+      {gameState === 'landing' && (
+        <div style={{
+          textAlign: 'center',
+          color: 'white',
+          fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+        }}>
+          <h1 style={{
+            fontSize: '4rem',
+            fontWeight: '700',
+            marginBottom: '1rem',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text'
+          }}>
+            ReChess
+          </h1>
+          <p style={{
+            fontSize: '1.5rem',
+            fontWeight: '300',
+            marginBottom: '3rem',
+            color: '#a0aec0'
+          }}>
+            Chess Redefined
+          </p>
+          <button
+            onClick={handlePlayClick}
+            style={{
+              fontSize: '1.25rem',
+              fontWeight: '600',
+              padding: '1rem 3rem',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '50px',
+              cursor: 'pointer',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              boxShadow: '0 10px 25px rgba(102, 126, 234, 0.3)'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.transform = 'translateY(-2px)'
+              e.target.style.boxShadow = '0 15px 35px rgba(102, 126, 234, 0.4)'
+            }}
+            onMouseOut={(e) => {
+              e.target.style.transform = 'translateY(0)'
+              e.target.style.boxShadow = '0 10px 25px rgba(102, 126, 234, 0.3)'
+            }}
+          >
+            Play
+          </button>
         </div>
       )}
-    </>
+
+      {gameState === 'queue' && (
+        <div style={{
+          textAlign: 'center',
+          color: 'white',
+          fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+        }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            border: '8px solid rgba(102, 126, 234, 0.2)',
+            borderTop: '8px solid #667eea',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 2rem'
+          }}></div>
+          <p style={{
+            fontSize: '1.5rem',
+            fontWeight: '300',
+            color: '#a0aec0'
+          }}>
+            Finding opponent...
+          </p>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {gameState === 'playing' && boardState && (
+        <div style={{ position: 'relative' }}>
+          {renderBoard(boardState, selectedSquare, handleSquareClick)}
+
+          {/* Promotion modal */}
+          {promotionPending && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              background: 'rgba(0, 0, 0, 0.7)',
+              borderRadius: '4px'
+            }}>
+              <div style={{
+                display: 'flex',
+                gap: '0.5rem'
+              }}>
+                {['queen', 'rook', 'bishop', 'knight'].map(pieceType => (
+                  <button
+                    key={pieceType}
+                    onClick={() => handlePromotion(pieceType)}
+                    style={{
+                      background: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '0.5rem',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s',
+                      width: '60px',
+                      height: '60px'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.1)'
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)'
+                    }}
+                  >
+                    <img
+                      src={getPieceSvgPath(pieceType, boardState.player_color)}
+                      alt={pieceType}
+                      style={{ width: '100%', height: '100%' }}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
