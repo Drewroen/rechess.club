@@ -77,12 +77,8 @@ function renderBoard(boardState, selectedSquare, onSquareClick) {
 }
 
 function App() {
-  const [status, setStatus] = useState('Connecting...')
-  const [messages, setMessages] = useState([])
   const [boardState, setBoardState] = useState(null)
-  const [messagesCollapsed, setMessagesCollapsed] = useState(false)
   const [selectedSquare, setSelectedSquare] = useState(null) // { row, col } or null
-  const [gameOver, setGameOver] = useState(null) // { result, is_checkmate, is_stalemate } or null
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
 
@@ -131,7 +127,6 @@ function App() {
 
       websocket.onopen = () => {
         if (!isMounted) return
-        setStatus('Connected')
         console.log('WebSocket connected')
       }
 
@@ -143,30 +138,20 @@ function App() {
           const data = JSON.parse(event.data)
           if (data.type === 'board_state') {
             setBoardState(data)
-          } else if (data.type === 'game_over') {
-            setGameOver({
-              result: data.result,
-              is_checkmate: data.is_checkmate,
-              is_stalemate: data.is_stalemate
-            })
           }
-          setMessages(prev => [...prev, event.data])
         } catch (e) {
-          // If not JSON, just add as message
-          setMessages(prev => [...prev, event.data])
+          // Ignore non-JSON messages
         }
       }
 
       websocket.onerror = (error) => {
         if (!isMounted) return
         console.error('WebSocket error:', error)
-        setStatus('Error - Retrying...')
       }
 
       websocket.onclose = () => {
         if (!isMounted) return
         console.log('WebSocket disconnected')
-        setStatus('Disconnected - Retrying...')
 
         // Attempt to reconnect after 3 seconds
         reconnectTimeoutRef.current = setTimeout(() => {
@@ -194,51 +179,11 @@ function App() {
 
   return (
     <>
-      <h1>ReChess.club</h1>
-      <div className="card">
-        <p>Connection Status: <strong>{status}</strong></p>
-
-        {boardState && (
-          <div>
-            <h2>Chess Board</h2>
-            <p>Room ID: {boardState.room_id}</p>
-            <p>You are playing as: <strong>{boardState.player_color}</strong></p>
-            <p>Current Turn: <strong>{boardState.current_turn}</strong></p>
-            {gameOver && (
-              <div style={{
-                backgroundColor: '#ffeb3b',
-                padding: '15px',
-                margin: '10px 0',
-                borderRadius: '8px',
-                fontWeight: 'bold'
-              }}>
-                <h3>Game Over!</h3>
-                <p>Result: {gameOver.result}</p>
-                {gameOver.is_checkmate && <p>Checkmate!</p>}
-                {gameOver.is_stalemate && <p>Stalemate!</p>}
-              </div>
-            )}
-            {selectedSquare && (
-              <p>Selected: Row {selectedSquare.row}, Col {selectedSquare.col}</p>
-            )}
-            <div style={{ display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
-              {renderBoard(boardState, selectedSquare, handleSquareClick)}
-            </div>
-          </div>
-        )}
-
-        <div>
-          <h2
-            onClick={() => setMessagesCollapsed(!messagesCollapsed)}
-            style={{ cursor: 'pointer', userSelect: 'none' }}
-          >
-            Messages: {messagesCollapsed ? '▶' : '▼'}
-          </h2>
-          {!messagesCollapsed && messages.map((msg, index) => (
-            <p key={index}>{msg}</p>
-          ))}
+      {boardState && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+          {renderBoard(boardState, selectedSquare, handleSquareClick)}
         </div>
-      </div>
+      )}
     </>
   )
 }
