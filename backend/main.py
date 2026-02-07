@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import List, Dict, Optional
 import uuid
 import json
-from chess_game import ChessGame, Color, Position, PieceType
+from chess_game import ChessGame, Color, Position, PieceType, Piece
 
 app = FastAPI()
 
@@ -12,6 +12,7 @@ class Room:
         self.player1 = player1
         self.player2 = player2
         self.game = ChessGame()
+        self.premoves: Dict[WebSocket, Dict] = {}  # Store premoves per player
 
     async def notify_players(self, message: str) -> None:
         try:
@@ -81,6 +82,19 @@ class Room:
                                 {"row": move.row, "col": move.col} for move in moves
                             ]
                 board_state["available_moves"] = available_moves
+            else:
+                # Add available premove moves for the player waiting for their turn
+                premove_moves = {}
+                for pos, piece in board_snapshot:
+                    if piece.color == color:
+                        # For premoves, show all theoretically possible moves for the piece
+                        # This will be validated when the premove is actually attempted
+                        moves = self._get_theoretical_moves(pos, piece)
+                        if moves:
+                            premove_moves[f"{pos.row},{pos.col}"] = [
+                                {"row": move.row, "col": move.col} for move in moves
+                            ]
+                board_state["premove_available_moves"] = premove_moves
 
             message = json.dumps(board_state)
             try:
@@ -98,6 +112,107 @@ class Room:
         elif websocket == self.player2:
             return Color.BLACK
         return None
+
+    def _get_theoretical_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get all theoretical moves for a piece (for premove suggestions).
+
+        This returns all squares a piece could potentially move to, regardless of
+        the current board state. This allows premoves to capture pieces that will
+        move into position, or move to squares that will become available.
+        """
+        moves = []
+
+        if piece.piece_type == PieceType.PAWN:
+            # Pawns can move forward 1 or 2 squares (if not moved) and capture diagonally
+            direction = 1 if piece.color == Color.WHITE else -1
+
+            # Forward moves (1 square)
+            forward_pos = from_pos.offset(direction, 0)
+            if forward_pos.is_valid():
+                moves.append(forward_pos)
+
+            # Double move (2 squares) - only from starting position
+            if not piece.has_moved:
+                double_forward = from_pos.offset(2 * direction, 0)
+                if double_forward.is_valid():
+                    moves.append(double_forward)
+
+            # Diagonal captures (both directions)
+            for col_offset in [-1, 1]:
+                capture_pos = from_pos.offset(direction, col_offset)
+                if capture_pos.is_valid():
+                    moves.append(capture_pos)
+
+        elif piece.piece_type == PieceType.KNIGHT:
+            # Knights can jump to 8 possible squares
+            knight_offsets = [
+                (2, 1), (2, -1), (-2, 1), (-2, -1),
+                (1, 2), (1, -2), (-1, 2), (-1, -2)
+            ]
+            for row_offset, col_offset in knight_offsets:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+        elif piece.piece_type == PieceType.KING:
+            # Kings can move one square in any direction
+            for row_offset in [-1, 0, 1]:
+                for col_offset in [-1, 0, 1]:
+                    if row_offset == 0 and col_offset == 0:
+                        continue
+                    to_pos = from_pos.offset(row_offset, col_offset)
+                    if to_pos.is_valid():
+                        moves.append(to_pos)
+
+            # Castling squares (if king hasn't moved)
+            if not piece.has_moved:
+                # Kingside castling
+                kingside_pos = from_pos.offset(0, 2)
+                if kingside_pos.is_valid():
+                    moves.append(kingside_pos)
+                # Queenside castling
+                queenside_pos = from_pos.offset(0, -2)
+                if queenside_pos.is_valid():
+                    moves.append(queenside_pos)
+
+        elif piece.piece_type in [PieceType.ROOK, PieceType.BISHOP, PieceType.QUEEN]:
+            # Sliding pieces - show all squares in their movement directions
+            if piece.piece_type == PieceType.ROOK:
+                directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+            elif piece.piece_type == PieceType.BISHOP:
+                directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+            else:  # QUEEN
+                directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+
+            for row_delta, col_delta in directions:
+                current_pos = from_pos
+                # Continue sliding until we hit the board edge
+                while True:
+                    current_pos = current_pos.offset(row_delta, col_delta)
+                    if not current_pos.is_valid():
+                        break
+                    moves.append(current_pos)
+
+        return moves
+
+    def is_valid_premove(self, from_pos: Position, to_pos: Position, player_color: Color) -> bool:
+        """Check if a move could possibly be valid for the player when it becomes their turn."""
+        # Check if there's a piece at the from position
+        piece = self.game.get_piece(from_pos)
+        if not piece:
+            return False
+
+        # Check if the piece belongs to the player
+        if piece.color != player_color:
+            return False
+
+        # Check if positions are valid
+        if not from_pos.is_valid() or not to_pos.is_valid():
+            return False
+
+        # For premoves, we allow any move that could theoretically be valid
+        # We don't check if it's currently legal, just if it's a possible move for that piece type
+        return True
 
 class ConnectionManager:
     def __init__(self) -> None:
@@ -197,31 +312,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if not player_color:
                     continue
 
-                # Check if it's the player's turn
-                if player_color != room.game.current_turn:
-                    await websocket.send_text(json.dumps({
-                        "type": "error",
-                        "message": "Not your turn"
-                    }))
-                    continue
-
-                # Parse move positions
+                # Parse move positions first to use in premove validation
                 try:
                     from_pos = Position(message["from"]["row"], message["from"]["col"])
                     to_pos = Position(message["to"]["row"], message["to"]["col"])
                     promotion_str = message.get("promotion")  # Optional promotion piece type
-
-                    # Convert string promotion type to PieceType enum
-                    promotion = None
-                    if promotion_str:
-                        try:
-                            promotion = PieceType(promotion_str)
-                        except ValueError:
-                            await websocket.send_text(json.dumps({
-                                "type": "error",
-                                "message": f"Invalid promotion type: {promotion_str}"
-                            }))
-                            continue
                 except (KeyError, TypeError):
                     await websocket.send_text(json.dumps({
                         "type": "error",
@@ -229,10 +324,48 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     }))
                     continue
 
+                # Check if it's the player's turn
+                if player_color != room.game.current_turn:
+                    # Not the player's turn - treat as a premove
+                    if room.is_valid_premove(from_pos, to_pos, player_color):
+                        # Store the premove (replaces any existing premove)
+                        room.premoves[websocket] = {
+                            "from": message["from"],
+                            "to": message["to"],
+                            "promotion": promotion_str
+                        }
+                        await websocket.send_text(json.dumps({
+                            "type": "premove_set",
+                            "from": message["from"],
+                            "to": message["to"]
+                        }))
+                    else:
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "message": "Invalid premove"
+                        }))
+                    continue
+
+                # Convert string promotion type to PieceType enum
+                promotion = None
+                if promotion_str:
+                    try:
+                        promotion = PieceType(promotion_str)
+                    except ValueError:
+                        await websocket.send_text(json.dumps({
+                            "type": "error",
+                            "message": f"Invalid promotion type: {promotion_str}"
+                        }))
+                        continue
+
                 # Attempt to make the move
                 success = room.game.make_move(from_pos, to_pos, promotion)
 
                 if success:
+                    # Clear the premove for the player who just moved
+                    if websocket in room.premoves:
+                        del room.premoves[websocket]
+
                     # Broadcast updated board state to both players
                     await room.broadcast_board_state()
 
@@ -245,6 +378,49 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "is_checkmate": room.game.is_checkmate(),
                             "is_stalemate": room.game.is_stalemate()
                         }))
+                    else:
+                        # Check if the opponent has a premove
+                        opponent = room.player2 if websocket == room.player1 else room.player1
+                        if opponent in room.premoves:
+                            premove_data = room.premoves[opponent]
+
+                            # Try to execute the premove
+                            try:
+                                premove_from = Position(premove_data["from"]["row"], premove_data["from"]["col"])
+                                premove_to = Position(premove_data["to"]["row"], premove_data["to"]["col"])
+                                premove_promotion_str = premove_data.get("promotion")
+
+                                # Convert promotion string to PieceType if present
+                                premove_promotion = None
+                                if premove_promotion_str:
+                                    try:
+                                        premove_promotion = PieceType(premove_promotion_str)
+                                    except ValueError:
+                                        pass
+
+                                # Attempt the premove
+                                premove_success = room.game.make_move(premove_from, premove_to, premove_promotion)
+
+                                # Clear the premove regardless of success
+                                del room.premoves[opponent]
+
+                                if premove_success:
+                                    # Broadcast the new board state
+                                    await room.broadcast_board_state()
+
+                                    # Check for game over after premove
+                                    if room.game.is_game_over():
+                                        game_result = room.game.get_game_result()
+                                        await room.notify_players(json.dumps({
+                                            "type": "game_over",
+                                            "result": game_result,
+                                            "is_checkmate": room.game.is_checkmate(),
+                                            "is_stalemate": room.game.is_stalemate()
+                                        }))
+                            except (KeyError, TypeError):
+                                # Invalid premove data, just clear it
+                                if opponent in room.premoves:
+                                    del room.premoves[opponent]
                 else:
                     await websocket.send_text(json.dumps({
                         "type": "error",

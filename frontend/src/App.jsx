@@ -3,16 +3,22 @@ import './App.css'
 import { getPieceSvgPath } from './services/chessPieces'
 
 // Helper function to render board with checkered pattern
-function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = false, draggedPiece = null, onPieceMouseDown = null) {
+function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = false, draggedPiece = null, onPieceMouseDown = null, premove = null) {
   if (!boardState || !boardState.board) return null
 
   const board = boardState.board
   const squareSize = 88 // Size of each square in pixels
   const isBlack = boardState.player_color === 'black'
 
+  // Determine if it's the player's turn
+  const isPlayerTurn = boardState.current_turn === boardState.player_color
+
   // Get available moves for the selected piece
-  const availableMoves = selectedSquare && boardState.available_moves
-    ? boardState.available_moves[`${selectedSquare.row},${selectedSquare.col}`] || []
+  // Use regular moves if it's player's turn, premoves if not
+  const availableMoves = selectedSquare
+    ? (isPlayerTurn
+        ? (boardState.available_moves?.[`${selectedSquare.row},${selectedSquare.col}`] || [])
+        : (boardState.premove_available_moves?.[`${selectedSquare.row},${selectedSquare.col}`] || []))
     : []
 
   // Get last move information
@@ -119,6 +125,11 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
         const pieceKey = `${move.row},${move.col}`
         const isCapture = board[pieceKey] !== undefined
 
+        // Use different colors for premoves vs regular moves
+        const isPremoveMode = !isPlayerTurn
+        const dotColor = isPremoveMode ? 'rgba(20, 30, 85, .5)' : 'rgba(20, 85, 30, 0.5)'
+        const ringColor = isPremoveMode ? 'rgba(20, 30, 85, 0.3)' : 'rgba(20, 85, 0, 0.3)'
+
         return (
           <foreignObject
             key={`move-${idx}`}
@@ -132,12 +143,40 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
               width: '100%',
               height: '100%',
               background: isCapture
-                ? 'radial-gradient(transparent 0%, transparent 79%, rgba(20, 85, 0, 0.3) calc(80% + 1px))'
-                : 'radial-gradient(rgba(20, 85, 30, 0.5) 19%, rgba(0, 0, 0, 0) calc(20% + 1px))'
+                ? `radial-gradient(transparent 0%, transparent 79%, ${ringColor} calc(80% + 1px))`
+                : `radial-gradient(${dotColor} 19%, rgba(0, 0, 0, 0) calc(20% + 1px))`
             }} />
           </foreignObject>
         )
       })}
+
+      {/* Render premove overlay (from and to squares) */}
+      {premove && Array.from({ length: 8 }).map((_, row) =>
+        Array.from({ length: 8 }).map((_, col) => {
+          const boardRow = isBlack ? row : 7 - row
+          const boardCol = isBlack ? 7 - col : col
+
+          // Check if this square is either the from or to position of the premove
+          const isPremoveSquare =
+            (premove.from.row === boardRow && premove.from.col === boardCol) ||
+            (premove.to.row === boardRow && premove.to.col === boardCol)
+
+          if (isPremoveSquare) {
+            return (
+              <rect
+                key={`premove-${row}-${col}`}
+                x={col * squareSize}
+                y={row * squareSize}
+                width={squareSize}
+                height={squareSize}
+                fill="rgba(20, 30, 85, .5)"
+                style={{ pointerEvents: 'none' }}
+              />
+            )
+          }
+          return null
+        })
+      )}
 
       {/* Render check overlay on king square */}
       {boardState.in_check && boardState.king_position && (() => {
@@ -231,9 +270,11 @@ function App() {
   const [promotionPending, setPromotionPending] = useState(null) // { from, to } or null
   const [gameOver, setGameOver] = useState(null) // { result, is_checkmate, is_stalemate } or null
   const [draggedPiece, setDraggedPiece] = useState(null) // { row, col, piece, clientX, clientY } or null
+  const [premove, setPremove] = useState(null) // { from: { row, col }, to: { row, col } } or null
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
   const boardRef = useRef(null)
+  const previousBoardStateRef = useRef(null)
 
   const handlePieceMouseDown = (e, row, col) => {
     e.preventDefault()
@@ -242,8 +283,16 @@ function App() {
     const pieceKey = `${row},${col}`
     const piece = boardState?.board[pieceKey]
 
-    // Only allow dragging player's own pieces that have available moves
-    if (piece && piece.color === boardState.player_color && boardState.available_moves?.[pieceKey]?.length > 0) {
+    // Determine if it's the player's turn
+    const isPlayerTurn = boardState.current_turn === boardState.player_color
+
+    // Allow dragging player's own pieces
+    // Check available_moves for player's turn, premove_available_moves for opponent's turn
+    const hasAvailableMoves = isPlayerTurn
+      ? boardState.available_moves?.[pieceKey]?.length > 0
+      : boardState.premove_available_moves?.[pieceKey]?.length > 0
+
+    if (piece && piece.color === boardState.player_color && hasAvailableMoves) {
       // Track if this piece was already selected before we started dragging
       const wasAlreadySelected = selectedSquare?.row === row && selectedSquare?.col === col
 
@@ -306,7 +355,10 @@ function App() {
 
       // Check if this is a valid move
       const pieceKey = `${draggedPiece.row},${draggedPiece.col}`
-      const availableMoves = boardState.available_moves?.[pieceKey] || []
+      const isPlayerTurn = boardState.current_turn === boardState.player_color
+      const availableMoves = isPlayerTurn
+        ? (boardState.available_moves?.[pieceKey] || [])
+        : (boardState.premove_available_moves?.[pieceKey] || [])
       const isValidMove = availableMoves.some(move => move.row === boardRow && move.col === boardCol)
 
       if (isValidMove) {
@@ -316,6 +368,29 @@ function App() {
             from: { row: draggedPiece.row, col: draggedPiece.col },
             to: { row: boardRow, col: boardCol }
           })
+          setSelectedSquare(null)
+          setDraggedPiece(null)
+          return
+        }
+
+        // If it's not the player's turn, store as premove and show overlay
+        if (!isPlayerTurn) {
+          const premoveData = {
+            from: { row: draggedPiece.row, col: draggedPiece.col },
+            to: { row: boardRow, col: boardCol }
+          }
+          setPremove(premoveData)
+
+          // Send premove to backend
+          const moveData = {
+            type: 'move',
+            ...premoveData
+          }
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify(moveData))
+            console.log('Premove sent:', moveData)
+          }
+
           setSelectedSquare(null)
           setDraggedPiece(null)
           return
@@ -349,13 +424,15 @@ function App() {
     // Ignore clicks if we're currently dragging
     if (draggedPiece) return
 
+    const isPlayerTurn = boardState.current_turn === boardState.player_color
+
     if (!selectedSquare) {
       // First click: select the piece if it belongs to the player
       const pieceKey = `${row},${col}`
       const piece = boardState?.board[pieceKey]
 
-      // Only select if it's the player's piece and it's the player's turn
-      if (piece && piece.color === boardState.player_color && boardState.current_turn === boardState.player_color) {
+      // Allow selection of player's pieces regardless of turn (for premoves)
+      if (piece && piece.color === boardState.player_color) {
         setSelectedSquare({ row, col })
       }
     } else {
@@ -363,8 +440,10 @@ function App() {
       const pieceKey = `${selectedSquare.row},${selectedSquare.col}`
       const piece = boardState?.board[pieceKey]
 
-      // Check if the clicked square is a valid move
-      const availableMoves = boardState.available_moves?.[pieceKey] || []
+      // Check if the clicked square is a valid move (use premove_available_moves if not player's turn)
+      const availableMoves = isPlayerTurn
+        ? (boardState.available_moves?.[pieceKey] || [])
+        : (boardState.premove_available_moves?.[pieceKey] || [])
       const isValidMove = availableMoves.some(move => move.row === row && move.col === col)
 
       // Check if this is a pawn promotion (pawn reaching last rank AND it's a valid move)
@@ -374,6 +453,28 @@ function App() {
           from: { row: selectedSquare.row, col: selectedSquare.col },
           to: { row, col }
         })
+        setSelectedSquare(null)
+        return
+      }
+
+      // If it's not the player's turn, store as premove and show overlay
+      if (!isPlayerTurn && isValidMove) {
+        const premoveData = {
+          from: { row: selectedSquare.row, col: selectedSquare.col },
+          to: { row, col }
+        }
+        setPremove(premoveData)
+
+        // Send premove to backend
+        const moveData = {
+          type: 'move',
+          ...premoveData
+        }
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify(moveData))
+          console.log('Premove sent:', moveData)
+        }
+
         setSelectedSquare(null)
         return
       }
@@ -473,6 +574,38 @@ function App() {
       setBoardState(null)
     }
   }
+
+  useEffect(() => {
+    // Clear premove when board state changes (a move was made)
+    if (boardState && premove && previousBoardStateRef.current) {
+      // Only clear if the board state actually changed (a new move was made)
+      const previousLastMove = previousBoardStateRef.current.last_move
+      const currentLastMove = boardState.last_move
+
+      // Check if a new move was made (last_move changed)
+      const boardChanged = JSON.stringify(previousLastMove) !== JSON.stringify(currentLastMove)
+
+      if (boardChanged) {
+        // Check if the premove was executed by seeing if it matches the last move
+        if (currentLastMove &&
+            currentLastMove.from.row === premove.from.row &&
+            currentLastMove.from.col === premove.from.col &&
+            currentLastMove.to.row === premove.to.row &&
+            currentLastMove.to.col === premove.to.col) {
+          // Premove was executed, clear it
+          setPremove(null)
+        } else {
+          // A different move was made, clear the premove
+          setPremove(null)
+        }
+      }
+    }
+
+    // Update the previous board state
+    if (boardState) {
+      previousBoardStateRef.current = boardState
+    }
+  }, [boardState, premove])
 
   useEffect(() => {
     // Cleanup on unmount
@@ -587,7 +720,7 @@ function App() {
           onMouseLeave={() => setDraggedPiece(null)}
         >
           <div ref={boardRef}>
-            {renderBoard(boardState, selectedSquare, handleSquareClick, gameOver !== null, draggedPiece, handlePieceMouseDown)}
+            {renderBoard(boardState, selectedSquare, handleSquareClick, gameOver !== null, draggedPiece, handlePieceMouseDown, premove)}
           </div>
 
           {/* Render dragged piece at cursor position */}
