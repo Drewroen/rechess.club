@@ -244,12 +244,16 @@ function App() {
 
     // Only allow dragging player's own pieces that have available moves
     if (piece && piece.color === boardState.player_color && boardState.available_moves?.[pieceKey]?.length > 0) {
+      // Track if this piece was already selected before we started dragging
+      const wasAlreadySelected = selectedSquare?.row === row && selectedSquare?.col === col
+
       setDraggedPiece({
         row,
         col,
         piece,
         clientX: e.clientX,
-        clientY: e.clientY
+        clientY: e.clientY,
+        wasAlreadySelected
       })
       setSelectedSquare({ row, col })
     }
@@ -289,6 +293,17 @@ function App() {
       const boardRow = isBlack ? svgRow : 7 - svgRow
       const boardCol = isBlack ? 7 - svgCol : svgCol
 
+      // Check if dropped on the same square it started from
+      if (boardRow === draggedPiece.row && boardCol === draggedPiece.col) {
+        // Toggle selection: if it was already selected before drag, deselect; otherwise keep selected
+        if (draggedPiece.wasAlreadySelected) {
+          setSelectedSquare(null)
+        }
+        // If it wasn't already selected, it's now selected (from handlePieceMouseDown), so keep it selected
+        setDraggedPiece(null)
+        return
+      }
+
       // Check if this is a valid move
       const pieceKey = `${draggedPiece.row},${draggedPiece.col}`
       const availableMoves = boardState.available_moves?.[pieceKey] || []
@@ -321,6 +336,9 @@ function App() {
         }
 
         setSelectedSquare(null)
+      } else {
+        // Invalid move - deselect the piece
+        setSelectedSquare(null)
       }
     }
 
@@ -332,12 +350,12 @@ function App() {
     if (draggedPiece) return
 
     if (!selectedSquare) {
-      // First click: select the piece only if it belongs to the player and has available moves
+      // First click: select the piece if it belongs to the player
       const pieceKey = `${row},${col}`
       const piece = boardState?.board[pieceKey]
 
-      // Only select if it's the player's piece and it has available moves
-      if (piece && piece.color === boardState.player_color && boardState.available_moves?.[pieceKey]?.length > 0) {
+      // Only select if it's the player's piece and it's the player's turn
+      if (piece && piece.color === boardState.player_color && boardState.current_turn === boardState.player_color) {
         setSelectedSquare({ row, col })
       }
     } else {
