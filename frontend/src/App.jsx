@@ -3,7 +3,7 @@ import './App.css'
 import { getPieceSvgPath } from './services/chessPieces'
 
 // Helper function to render board with checkered pattern
-function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = false) {
+function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = false, draggedPiece = null, onPieceMouseDown = null) {
   if (!boardState || !boardState.board) return null
 
   const board = boardState.board
@@ -194,6 +194,12 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
       {/* Render pieces on top of the board */}
       {Object.entries(board).map(([key, piece]) => {
         const [row, col] = key.split(',').map(Number)
+
+        // Skip rendering the piece being dragged
+        if (draggedPiece && draggedPiece.row === row && draggedPiece.col === col) {
+          return null
+        }
+
         // Convert board coordinates to SVG coordinates
         // If white: row 7 at top (board row 0 = SVG row 7)
         // If black: row 0 at top (board row 0 = SVG row 0), flip the board
@@ -210,6 +216,7 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
             height={squareSize}
             style={{ cursor: 'pointer', pointerEvents: 'all' }}
             onClick={() => onSquareClick(row, col)}
+            onMouseDown={(e) => onPieceMouseDown && onPieceMouseDown(e, row, col)}
           />
         )
       })}
@@ -223,10 +230,107 @@ function App() {
   const [gameState, setGameState] = useState('landing') // 'landing', 'queue', 'playing'
   const [promotionPending, setPromotionPending] = useState(null) // { from, to } or null
   const [gameOver, setGameOver] = useState(null) // { result, is_checkmate, is_stalemate } or null
+  const [draggedPiece, setDraggedPiece] = useState(null) // { row, col, piece, clientX, clientY } or null
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
+  const boardRef = useRef(null)
+
+  const handlePieceMouseDown = (e, row, col) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const pieceKey = `${row},${col}`
+    const piece = boardState?.board[pieceKey]
+
+    // Only allow dragging player's own pieces that have available moves
+    if (piece && piece.color === boardState.player_color && boardState.available_moves?.[pieceKey]?.length > 0) {
+      setDraggedPiece({
+        row,
+        col,
+        piece,
+        clientX: e.clientX,
+        clientY: e.clientY
+      })
+      setSelectedSquare({ row, col })
+    }
+  }
+
+  const handleMouseMove = (e) => {
+    if (draggedPiece) {
+      setDraggedPiece({
+        ...draggedPiece,
+        clientX: e.clientX,
+        clientY: e.clientY
+      })
+    }
+  }
+
+  const handleMouseUp = (e) => {
+    if (!draggedPiece || !boardRef.current) {
+      setDraggedPiece(null)
+      return
+    }
+
+    // Get the board's bounding rectangle
+    const rect = boardRef.current.getBoundingClientRect()
+    const squareSize = rect.width / 8
+
+    // Calculate which square the mouse is over
+    const isBlack = boardState.player_color === 'black'
+    const relativeX = e.clientX - rect.left
+    const relativeY = e.clientY - rect.top
+
+    // Convert pixel coordinates to board coordinates
+    const svgCol = Math.floor(relativeX / squareSize)
+    const svgRow = Math.floor(relativeY / squareSize)
+
+    // Check if within board bounds
+    if (svgCol >= 0 && svgCol < 8 && svgRow >= 0 && svgRow < 8) {
+      const boardRow = isBlack ? svgRow : 7 - svgRow
+      const boardCol = isBlack ? 7 - svgCol : svgCol
+
+      // Check if this is a valid move
+      const pieceKey = `${draggedPiece.row},${draggedPiece.col}`
+      const availableMoves = boardState.available_moves?.[pieceKey] || []
+      const isValidMove = availableMoves.some(move => move.row === boardRow && move.col === boardCol)
+
+      if (isValidMove) {
+        // Check if this is a pawn promotion
+        if (draggedPiece.piece.piece_type === 'pawn' && (boardRow === 0 || boardRow === 7)) {
+          setPromotionPending({
+            from: { row: draggedPiece.row, col: draggedPiece.col },
+            to: { row: boardRow, col: boardCol }
+          })
+          setSelectedSquare(null)
+          setDraggedPiece(null)
+          return
+        }
+
+        // Send the move
+        const moveData = {
+          type: 'move',
+          from: { row: draggedPiece.row, col: draggedPiece.col },
+          to: { row: boardRow, col: boardCol }
+        }
+
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify(moveData))
+          console.log('Move sent:', moveData)
+        } else {
+          alert('WebSocket is not connected')
+        }
+
+        setSelectedSquare(null)
+      }
+    }
+
+    setDraggedPiece(null)
+  }
 
   const handleSquareClick = (row, col) => {
+    // Ignore clicks if we're currently dragging
+    if (draggedPiece) return
+
     if (!selectedSquare) {
       // First click: select the piece only if it belongs to the player and has available moves
       const pieceKey = `${row},${col}`
@@ -458,8 +562,33 @@ function App() {
       )}
 
       {gameState === 'playing' && boardState && (
-        <div style={{ position: 'relative' }}>
-          {renderBoard(boardState, selectedSquare, handleSquareClick, gameOver !== null)}
+        <div
+          style={{ position: 'relative', cursor: draggedPiece ? 'grabbing' : 'default' }}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={() => setDraggedPiece(null)}
+        >
+          <div ref={boardRef}>
+            {renderBoard(boardState, selectedSquare, handleSquareClick, gameOver !== null, draggedPiece, handlePieceMouseDown)}
+          </div>
+
+          {/* Render dragged piece at cursor position */}
+          {draggedPiece && (
+            <img
+              src={getPieceSvgPath(draggedPiece.piece.piece_type, draggedPiece.piece.color)}
+              style={{
+                position: 'fixed',
+                left: draggedPiece.clientX - 44,
+                top: draggedPiece.clientY - 44,
+                width: '88px',
+                height: '88px',
+                pointerEvents: 'none',
+                zIndex: 1000,
+                opacity: 0.8
+              }}
+              alt="dragged piece"
+            />
+          )}
 
           {/* Promotion modal */}
           {promotionPending && (
