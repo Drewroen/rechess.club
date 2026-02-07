@@ -3,7 +3,7 @@ import './App.css'
 import { getPieceSvgPath } from './services/chessPieces'
 
 // Helper function to render board with checkered pattern
-function renderBoard(boardState, selectedSquare, onSquareClick) {
+function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = false) {
   if (!boardState || !boardState.board) return null
 
   const board = boardState.board
@@ -20,7 +20,10 @@ function renderBoard(boardState, selectedSquare, onSquareClick) {
       width={squareSize * 8}
       height={squareSize * 8}
       viewBox={`0 0 ${squareSize * 8} ${squareSize * 8}`}
-      style={{ border: '2px solid #333' }}
+      style={{
+        border: '2px solid #333',
+        filter: isGameOver ? 'grayscale(100%)' : 'none'
+      }}
     >
       {/* Render checkered board pattern */}
       {Array.from({ length: 8 }).map((_, row) =>
@@ -33,20 +36,7 @@ function renderBoard(boardState, selectedSquare, onSquareClick) {
 
           // Calculate if square should be light or dark
           const isLightSquare = (row + col) % 2 === 0
-          let fillColor = isLightSquare ? '#f0d9b5' : '#b58863'
-
-          // Highlight selected square
-          if (selectedSquare && selectedSquare.row === boardRow && selectedSquare.col === boardCol) {
-            fillColor = '#7fc97f'
-          }
-
-          // Highlight available move squares
-          const isAvailableMove = availableMoves.some(
-            move => move.row === boardRow && move.col === boardCol
-          )
-          if (isAvailableMove) {
-            fillColor = '#baca44'
-          }
+          const fillColor = isLightSquare ? '#f0d9b5' : '#b58863'
 
           return (
             <rect
@@ -62,6 +52,81 @@ function renderBoard(boardState, selectedSquare, onSquareClick) {
           )
         })
       )}
+
+      {/* Render selected square highlight */}
+      {selectedSquare && Array.from({ length: 8 }).map((_, row) =>
+        Array.from({ length: 8 }).map((_, col) => {
+          const boardRow = isBlack ? row : 7 - row
+          const boardCol = isBlack ? 7 - col : col
+
+          if (selectedSquare.row === boardRow && selectedSquare.col === boardCol) {
+            return (
+              <rect
+                key={`selected-${row}-${col}`}
+                x={col * squareSize}
+                y={row * squareSize}
+                width={squareSize}
+                height={squareSize}
+                fill="rgba(20, 85, 30, 0.5)"
+                style={{ pointerEvents: 'none' }}
+              />
+            )
+          }
+          return null
+        })
+      )}
+
+      {/* Render available move indicators */}
+      {availableMoves.map((move, idx) => {
+        // Convert board coordinates to SVG coordinates
+        const svgRow = isBlack ? move.row : 7 - move.row
+        const svgCol = isBlack ? 7 - move.col : move.col
+        const x = svgCol * squareSize
+        const y = svgRow * squareSize
+        const centerX = x + squareSize / 2
+        const centerY = y + squareSize / 2
+
+        // Check if this move captures a piece
+        const pieceKey = `${move.row},${move.col}`
+        const isCapture = board[pieceKey] !== undefined
+
+        if (isCapture) {
+          // Render capture indicator (ring around the piece)
+          return (
+            <g key={`move-${idx}`}>
+              <defs>
+                <radialGradient id={`capture-gradient-${idx}`}>
+                  <stop offset="0%" stopColor="transparent" />
+                  <stop offset="79%" stopColor="transparent" />
+                  <stop offset="80%" stopColor="rgba(20, 85, 0, 0.3)" />
+                  <stop offset="100%" stopColor="rgba(20, 85, 0, 0.3)" />
+                </radialGradient>
+              </defs>
+              <rect
+                x={x}
+                y={y}
+                width={squareSize}
+                height={squareSize}
+                fill={`url(#capture-gradient-${idx})`}
+                style={{ pointerEvents: 'none' }}
+              />
+            </g>
+          )
+        } else {
+          // Render regular move indicator (small circle)
+          const radius = squareSize * 0.15
+          return (
+            <circle
+              key={`move-${idx}`}
+              cx={centerX}
+              cy={centerY}
+              r={radius}
+              fill="rgba(20, 85, 30, 0.5)"
+              style={{ pointerEvents: 'none' }}
+            />
+          )
+        }
+      })}
 
       {/* Render pieces on top of the board */}
       {Object.entries(board).map(([key, piece]) => {
@@ -94,6 +159,7 @@ function App() {
   const [selectedSquare, setSelectedSquare] = useState(null) // { row, col } or null
   const [gameState, setGameState] = useState('landing') // 'landing', 'queue', 'playing'
   const [promotionPending, setPromotionPending] = useState(null) // { from, to } or null
+  const [gameOver, setGameOver] = useState(null) // { result, is_checkmate, is_stalemate } or null
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
 
@@ -166,6 +232,19 @@ function App() {
     connect()
   }
 
+  const handlePlayAgain = () => {
+    // Disconnect websocket
+    if (wsRef.current) {
+      wsRef.current.close()
+    }
+    // Reset state
+    setGameOver(null)
+    setBoardState(null)
+    setSelectedSquare(null)
+    setPromotionPending(null)
+    setGameState('landing')
+  }
+
   const connect = () => {
     const websocket = new WebSocket('ws://localhost:8000/ws')
     wsRef.current = websocket
@@ -182,6 +261,12 @@ function App() {
         if (data.type === 'board_state') {
           setBoardState(data)
           setGameState('playing')
+        } else if (data.type === 'game_over') {
+          setGameOver({
+            result: data.result,
+            is_checkmate: data.is_checkmate,
+            is_stalemate: data.is_stalemate
+          })
         }
       } catch (e) {
         // Text message (e.g., "Waiting for opponent...")
@@ -306,7 +391,7 @@ function App() {
 
       {gameState === 'playing' && boardState && (
         <div style={{ position: 'relative' }}>
-          {renderBoard(boardState, selectedSquare, handleSquareClick)}
+          {renderBoard(boardState, selectedSquare, handleSquareClick, gameOver !== null)}
 
           {/* Promotion modal */}
           {promotionPending && (
@@ -354,6 +439,80 @@ function App() {
                     />
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Game over overlay */}
+          {gameOver && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              background: 'rgba(0, 0, 0, 0.8)',
+              borderRadius: '4px'
+            }}>
+              <div style={{
+                background: 'white',
+                padding: '2rem',
+                borderRadius: '8px',
+                textAlign: 'center',
+                fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+              }}>
+                <h2 style={{
+                  fontSize: '2rem',
+                  fontWeight: '700',
+                  marginBottom: '1rem',
+                  color: '#1a1a2e'
+                }}>
+                  Game Over
+                </h2>
+                <p style={{
+                  fontSize: '1.25rem',
+                  fontWeight: '500',
+                  color: '#667eea',
+                  marginBottom: '0.5rem'
+                }}>
+                  {gameOver.result}
+                </p>
+                <p style={{
+                  fontSize: '1rem',
+                  color: '#666',
+                  fontStyle: 'italic',
+                  marginBottom: '1.5rem'
+                }}>
+                  {gameOver.is_checkmate ? 'Checkmate' : gameOver.is_stalemate ? 'Stalemate' : ''}
+                </p>
+                <button
+                  onClick={handlePlayAgain}
+                  style={{
+                    fontSize: '1.1rem',
+                    fontWeight: '600',
+                    padding: '0.75rem 2rem',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '50px',
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    boxShadow: '0 8px 20px rgba(102, 126, 234, 0.3)'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.transform = 'translateY(-2px)'
+                    e.target.style.boxShadow = '0 12px 28px rgba(102, 126, 234, 0.4)'
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.transform = 'translateY(0)'
+                    e.target.style.boxShadow = '0 8px 20px rgba(102, 126, 234, 0.3)'
+                  }}
+                >
+                  Play again?
+                </button>
               </div>
             </div>
           )}
