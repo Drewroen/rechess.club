@@ -7,7 +7,7 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
   if (!boardState || !boardState.board) return null
 
   const board = boardState.board
-  const squareSize = 60 // Size of each square in pixels
+  const squareSize = 88 // Size of each square in pixels
   const isBlack = boardState.player_color === 'black'
 
   // Get available moves for the selected piece
@@ -36,7 +36,7 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
 
           // Calculate if square should be light or dark
           const isLightSquare = (row + col) % 2 === 0
-          const fillColor = isLightSquare ? '#f0d9b5' : '#b58863'
+          const fillColor = isLightSquare ? '#e8eaec' : '#798495'
 
           return (
             <rect
@@ -83,49 +83,29 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
         const svgCol = isBlack ? 7 - move.col : move.col
         const x = svgCol * squareSize
         const y = svgRow * squareSize
-        const centerX = x + squareSize / 2
-        const centerY = y + squareSize / 2
 
         // Check if this move captures a piece
         const pieceKey = `${move.row},${move.col}`
         const isCapture = board[pieceKey] !== undefined
 
-        if (isCapture) {
-          // Render capture indicator (ring around the piece)
-          return (
-            <g key={`move-${idx}`}>
-              <defs>
-                <radialGradient id={`capture-gradient-${idx}`}>
-                  <stop offset="0%" stopColor="transparent" />
-                  <stop offset="79%" stopColor="transparent" />
-                  <stop offset="80%" stopColor="rgba(20, 85, 0, 0.3)" />
-                  <stop offset="100%" stopColor="rgba(20, 85, 0, 0.3)" />
-                </radialGradient>
-              </defs>
-              <rect
-                x={x}
-                y={y}
-                width={squareSize}
-                height={squareSize}
-                fill={`url(#capture-gradient-${idx})`}
-                style={{ pointerEvents: 'none' }}
-              />
-            </g>
-          )
-        } else {
-          // Render regular move indicator (small circle)
-          const radius = squareSize * 0.15
-          return (
-            <circle
-              key={`move-${idx}`}
-              cx={centerX}
-              cy={centerY}
-              r={radius}
-              fill="rgba(20, 85, 30, 0.5)"
-              style={{ pointerEvents: 'none' }}
-            />
-          )
-        }
+        return (
+          <foreignObject
+            key={`move-${idx}`}
+            x={x}
+            y={y}
+            width={squareSize}
+            height={squareSize}
+            style={{ pointerEvents: 'none' }}
+          >
+            <div style={{
+              width: '100%',
+              height: '100%',
+              background: isCapture
+                ? 'radial-gradient(transparent 0%, transparent 79%, rgba(20, 85, 0, 0.3) calc(80% + 1px))'
+                : 'radial-gradient(rgba(20, 85, 30, 0.5) 19%, rgba(0, 0, 0, 0) calc(20% + 1px))'
+            }} />
+          </foreignObject>
+        )
       })}
 
       {/* Render pieces on top of the board */}
@@ -178,8 +158,12 @@ function App() {
       const pieceKey = `${selectedSquare.row},${selectedSquare.col}`
       const piece = boardState?.board[pieceKey]
 
-      // Check if this is a pawn promotion (pawn reaching last rank)
-      if (piece?.piece_type === 'pawn' && (row === 0 || row === 7)) {
+      // Check if the clicked square is a valid move
+      const availableMoves = boardState.available_moves?.[pieceKey] || []
+      const isValidMove = availableMoves.some(move => move.row === row && move.col === col)
+
+      // Check if this is a pawn promotion (pawn reaching last rank AND it's a valid move)
+      if (piece?.piece_type === 'pawn' && (row === 0 || row === 7) && isValidMove) {
         // Show promotion dialog
         setPromotionPending({
           from: { row: selectedSquare.row, col: selectedSquare.col },
@@ -303,7 +287,7 @@ function App() {
       justifyContent: 'center',
       alignItems: 'center',
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
+      background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
     }}>
       {gameState === 'landing' && (
         <div style={{
@@ -315,7 +299,7 @@ function App() {
             fontSize: '4rem',
             fontWeight: '700',
             marginBottom: '1rem',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #666666 0%, #999999 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
             backgroundClip: 'text'
@@ -326,7 +310,7 @@ function App() {
             fontSize: '1.5rem',
             fontWeight: '300',
             marginBottom: '3rem',
-            color: '#a0aec0'
+            color: '#888888'
           }}>
             Chess Redefined
           </p>
@@ -336,21 +320,21 @@ function App() {
               fontSize: '1.25rem',
               fontWeight: '600',
               padding: '1rem 3rem',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #4a4a4a 0%, #6a6a6a 100%)',
               color: 'white',
               border: 'none',
               borderRadius: '50px',
               cursor: 'pointer',
               transition: 'transform 0.2s, box-shadow 0.2s',
-              boxShadow: '0 10px 25px rgba(102, 126, 234, 0.3)'
+              boxShadow: '0 10px 25px rgba(74, 74, 74, 0.3)'
             }}
             onMouseOver={(e) => {
               e.target.style.transform = 'translateY(-2px)'
-              e.target.style.boxShadow = '0 15px 35px rgba(102, 126, 234, 0.4)'
+              e.target.style.boxShadow = '0 15px 35px rgba(74, 74, 74, 0.4)'
             }}
             onMouseOut={(e) => {
               e.target.style.transform = 'translateY(0)'
-              e.target.style.boxShadow = '0 10px 25px rgba(102, 126, 234, 0.3)'
+              e.target.style.boxShadow = '0 10px 25px rgba(74, 74, 74, 0.3)'
             }}
           >
             Play
@@ -367,8 +351,8 @@ function App() {
           <div style={{
             width: '80px',
             height: '80px',
-            border: '8px solid rgba(102, 126, 234, 0.2)',
-            borderTop: '8px solid #667eea',
+            border: '8px solid rgba(106, 106, 106, 0.2)',
+            borderTop: '8px solid #6a6a6a',
             borderRadius: '50%',
             animation: 'spin 1s linear infinite',
             margin: '0 auto 2rem'
@@ -376,7 +360,7 @@ function App() {
           <p style={{
             fontSize: '1.5rem',
             fontWeight: '300',
-            color: '#a0aec0'
+            color: '#888888'
           }}>
             Finding opponent...
           </p>
@@ -395,22 +379,29 @@ function App() {
 
           {/* Promotion modal */}
           {promotionPending && (
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              background: 'rgba(0, 0, 0, 0.7)',
-              borderRadius: '4px'
-            }}>
-              <div style={{
+            <div
+              onClick={() => setPromotionPending(null)}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
                 display: 'flex',
-                gap: '0.5rem'
-              }}>
+                justifyContent: 'center',
+                alignItems: 'center',
+                background: 'rgba(0, 0, 0, 0.7)',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  display: 'flex',
+                  gap: '0.5rem'
+                }}
+              >
                 {['queen', 'rook', 'bishop', 'knight'].map(pieceType => (
                   <button
                     key={pieceType}
@@ -468,14 +459,14 @@ function App() {
                   fontSize: '2rem',
                   fontWeight: '700',
                   marginBottom: '1rem',
-                  color: '#1a1a2e'
+                  color: '#2d2d2d'
                 }}>
                   Game Over
                 </h2>
                 <p style={{
                   fontSize: '1.25rem',
                   fontWeight: '500',
-                  color: '#667eea',
+                  color: '#6a6a6a',
                   marginBottom: '0.5rem'
                 }}>
                   {gameOver.result}
@@ -494,21 +485,21 @@ function App() {
                     fontSize: '1.1rem',
                     fontWeight: '600',
                     padding: '0.75rem 2rem',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #4a4a4a 0%, #6a6a6a 100%)',
                     color: 'white',
                     border: 'none',
                     borderRadius: '50px',
                     cursor: 'pointer',
                     transition: 'transform 0.2s, box-shadow 0.2s',
-                    boxShadow: '0 8px 20px rgba(102, 126, 234, 0.3)'
+                    boxShadow: '0 8px 20px rgba(74, 74, 74, 0.3)'
                   }}
                   onMouseOver={(e) => {
                     e.target.style.transform = 'translateY(-2px)'
-                    e.target.style.boxShadow = '0 12px 28px rgba(102, 126, 234, 0.4)'
+                    e.target.style.boxShadow = '0 12px 28px rgba(74, 74, 74, 0.4)'
                   }}
                   onMouseOut={(e) => {
                     e.target.style.transform = 'translateY(0)'
-                    e.target.style.boxShadow = '0 8px 20px rgba(102, 126, 234, 0.3)'
+                    e.target.style.boxShadow = '0 8px 20px rgba(74, 74, 74, 0.3)'
                   }}
                 >
                   Play again?
