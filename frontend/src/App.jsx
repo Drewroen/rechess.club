@@ -165,6 +165,32 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
         )
       })()}
 
+      {/* Render check overlay on opponent's king square */}
+      {boardState.opponent_in_check && boardState.opponent_king_position && (() => {
+        const kingPos = boardState.opponent_king_position
+        const svgRow = isBlack ? kingPos.row : 7 - kingPos.row
+        const svgCol = isBlack ? 7 - kingPos.col : kingPos.col
+        const x = svgCol * squareSize
+        const y = svgRow * squareSize
+
+        return (
+          <foreignObject
+            key="opponent-check-overlay"
+            x={x}
+            y={y}
+            width={squareSize}
+            height={squareSize}
+            style={{ pointerEvents: 'none' }}
+          >
+            <div style={{
+              width: '100%',
+              height: '100%',
+              background: 'radial-gradient(ellipse at center, rgb(255, 0, 0) 0%, rgb(231, 0, 0) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%)'
+            }} />
+          </foreignObject>
+        )
+      })()}
+
       {/* Render pieces on top of the board */}
       {Object.entries(board).map(([key, piece]) => {
         const [row, col] = key.split(',').map(Number)

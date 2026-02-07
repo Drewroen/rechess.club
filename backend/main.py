@@ -52,13 +52,22 @@ class Room:
                     "to": {"row": last_move.to_pos.row, "col": last_move.to_pos.col}
                 }
 
-            # Add check status and king position
+            # Add check status and king position for both players
+            # Check if this player's king is in check
             if self.game.is_in_check(color):
-                # Find the king position
                 for pos, piece in board_snapshot:
                     if piece.piece_type == PieceType.KING and piece.color == color:
                         board_state["in_check"] = True
                         board_state["king_position"] = {"row": pos.row, "col": pos.col}
+                        break
+
+            # Check if opponent's king is in check
+            opponent_color = Color.BLACK if color == Color.WHITE else Color.WHITE
+            if self.game.is_in_check(opponent_color):
+                for pos, piece in board_snapshot:
+                    if piece.piece_type == PieceType.KING and piece.color == opponent_color:
+                        board_state["opponent_in_check"] = True
+                        board_state["opponent_king_position"] = {"row": pos.row, "col": pos.col}
                         break
 
             # Add available moves for the player whose turn it is
