@@ -44,6 +44,14 @@ class Room:
                 "player_color": color.value
             }
 
+            # Add last move information if there is a move history
+            if self.game.move_history:
+                last_move = self.game.move_history[-1]
+                board_state["last_move"] = {
+                    "from": {"row": last_move.from_pos.row, "col": last_move.from_pos.col},
+                    "to": {"row": last_move.to_pos.row, "col": last_move.to_pos.col}
+                }
+
             # Add available moves for the player whose turn it is
             if color == self.game.current_turn:
                 available_moves = {}

@@ -15,6 +15,9 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
     ? boardState.available_moves[`${selectedSquare.row},${selectedSquare.col}`] || []
     : []
 
+  // Get last move information
+  const lastMove = boardState.last_move || null
+
   return (
     <svg
       width={squareSize * 8}
@@ -50,6 +53,34 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
               onClick={() => onSquareClick(boardRow, boardCol)}
             />
           )
+        })
+      )}
+
+      {/* Render last move highlight */}
+      {lastMove && Array.from({ length: 8 }).map((_, row) =>
+        Array.from({ length: 8 }).map((_, col) => {
+          const boardRow = isBlack ? row : 7 - row
+          const boardCol = isBlack ? 7 - col : col
+
+          // Check if this square is either the from or to position of the last move
+          const isLastMoveSquare =
+            (lastMove.from.row === boardRow && lastMove.from.col === boardCol) ||
+            (lastMove.to.row === boardRow && lastMove.to.col === boardCol)
+
+          if (isLastMoveSquare) {
+            return (
+              <rect
+                key={`lastmove-${row}-${col}`}
+                x={col * squareSize}
+                y={row * squareSize}
+                width={squareSize}
+                height={squareSize}
+                fill="rgba(155, 199, 0, .41)"
+                style={{ pointerEvents: 'none' }}
+              />
+            )
+          }
+          return null
         })
       )}
 
