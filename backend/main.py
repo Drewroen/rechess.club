@@ -52,6 +52,15 @@ class Room:
                     "to": {"row": last_move.to_pos.row, "col": last_move.to_pos.col}
                 }
 
+            # Add check status and king position
+            if self.game.is_in_check(color):
+                # Find the king position
+                for pos, piece in board_snapshot:
+                    if piece.piece_type == PieceType.KING and piece.color == color:
+                        board_state["in_check"] = True
+                        board_state["king_position"] = {"row": pos.row, "col": pos.col}
+                        break
+
             # Add available moves for the player whose turn it is
             if color == self.game.current_turn:
                 available_moves = {}

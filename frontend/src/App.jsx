@@ -139,6 +139,32 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
         )
       })}
 
+      {/* Render check overlay on king square */}
+      {boardState.in_check && boardState.king_position && (() => {
+        const kingPos = boardState.king_position
+        const svgRow = isBlack ? kingPos.row : 7 - kingPos.row
+        const svgCol = isBlack ? 7 - kingPos.col : kingPos.col
+        const x = svgCol * squareSize
+        const y = svgRow * squareSize
+
+        return (
+          <foreignObject
+            key="check-overlay"
+            x={x}
+            y={y}
+            width={squareSize}
+            height={squareSize}
+            style={{ pointerEvents: 'none' }}
+          >
+            <div style={{
+              width: '100%',
+              height: '100%',
+              background: 'radial-gradient(ellipse at center, rgb(255, 0, 0) 0%, rgb(231, 0, 0) 25%, rgba(169, 0, 0, 0) 89%, rgba(158, 0, 0, 0) 100%)'
+            }} />
+          </foreignObject>
+        )
+      })()}
+
       {/* Render pieces on top of the board */}
       {Object.entries(board).map(([key, piece]) => {
         const [row, col] = key.split(',').map(Number)
@@ -324,12 +350,12 @@ function App() {
         <div style={{
           textAlign: 'center',
           color: 'white',
-          fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+          fontFamily: "'Clash Grotesk', sans-serif"
         }}>
           <h1 style={{
             fontSize: '4rem',
             fontWeight: '700',
-            marginBottom: '1rem',
+            marginBottom: '0rem',
             background: 'linear-gradient(135deg, #666666 0%, #999999 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
@@ -340,10 +366,11 @@ function App() {
           <p style={{
             fontSize: '1.5rem',
             fontWeight: '300',
-            marginBottom: '3rem',
+            marginTop: '0',
+            marginBottom: '0.75rem',
             color: '#888888'
           }}>
-            Chess Redefined
+            Chess.... Redefined.
           </p>
           <button
             onClick={handlePlayClick}
@@ -377,7 +404,7 @@ function App() {
         <div style={{
           textAlign: 'center',
           color: 'white',
-          fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+          fontFamily: "'Clash Grotesk', sans-serif"
         }}>
           <div style={{
             width: '80px',
@@ -484,7 +511,7 @@ function App() {
                 padding: '2rem',
                 borderRadius: '8px',
                 textAlign: 'center',
-                fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+                fontFamily: "'Clash Grotesk', sans-serif"
               }}>
                 <h2 style={{
                   fontSize: '2rem',
