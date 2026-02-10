@@ -6,6 +6,9 @@ import asyncio
 import time
 from chess_game import ChessGame, Color, Position, PieceType, Piece
 
+# Time control configuration
+STARTING_TIME_SECONDS = 10.0
+
 app = FastAPI()
 
 class Room:
@@ -15,11 +18,12 @@ class Room:
         self.player2 = player2
         self.game = ChessGame()
         self.premoves: Dict[WebSocket, Dict] = {}  # Store premoves per player
+        self.game_ended = False  # Track if game has ended by any means
 
-        # Time controls: each player starts with 180 seconds (3 minutes)
+        # Time controls: each player starts with configured time
         self.time_remaining: Dict[Color, float] = {
-            Color.WHITE: 180.0,
-            Color.BLACK: 180.0
+            Color.WHITE: STARTING_TIME_SECONDS,
+            Color.BLACK: STARTING_TIME_SECONDS
         }
         self.last_move_time: Optional[float] = None  # Timestamp of last move
         self.time_update_task: Optional[asyncio.Task] = None  # Background task for time updates
@@ -286,6 +290,7 @@ class Room:
 
     async def _handle_time_expiration(self, color: Color) -> None:
         """Handle when a player runs out of time."""
+        self.game_ended = True
         winner_color = color.opposite()
         await self.notify_players(json.dumps({
             "type": "game_over",
@@ -369,7 +374,8 @@ class ConnectionManager:
                     room.time_update_task.cancel()
 
                 # Only send resignation message if the game wasn't already over
-                if not room.game.is_game_over():
+                if not room.game.is_game_over() and not room.game_ended:
+                    room.game_ended = True
                     # Determine winner (the player who stayed connected)
                     other_player = room.player2 if websocket == room.player1 else room.player1
                     winner_color = room.get_player_color(other_player)
@@ -490,6 +496,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         if room.time_update_task:
                             room.time_update_task.cancel()
 
+                        room.game_ended = True
                         game_result = room.game.get_game_result()
                         await room.notify_players(json.dumps({
                             "type": "game_over",
@@ -536,6 +543,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                         if room.time_update_task:
                                             room.time_update_task.cancel()
 
+                                        room.game_ended = True
                                         game_result = room.game.get_game_result()
                                         await room.notify_players(json.dumps({
                                             "type": "game_over",
