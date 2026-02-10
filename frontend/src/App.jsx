@@ -2,6 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import { getPieceSvgPath } from './services/chessPieces'
 
+// Helper function to format time (seconds) as MM:SS.t
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  const tenths = Math.floor((seconds % 1) * 10)
+  return `${mins}:${secs.toString().padStart(2, '0')}.${tenths}`
+}
+
 // Helper function to render board with checkered pattern
 function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = false, draggedPiece = null, onPieceMouseDown = null, premove = null) {
   if (!boardState || !boardState.board) return null
@@ -275,10 +283,16 @@ function App() {
   const [gameOver, setGameOver] = useState(null) // { result, is_checkmate, is_stalemate } or null
   const [draggedPiece, setDraggedPiece] = useState(null) // { row, col, piece, clientX, clientY } or null
   const [premove, setPremove] = useState(null) // { from: { row, col }, to: { row, col } } or null
+  const [whiteTime, setWhiteTime] = useState(180.0) // Timer state for white
+  const [blackTime, setBlackTime] = useState(180.0) // Timer state for black
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
   const boardRef = useRef(null)
   const previousBoardStateRef = useRef(null)
+  const whiteStartTimeRef = useRef(null)
+  const blackStartTimeRef = useRef(null)
+  const whiteInitialTimeRef = useRef(180.0)
+  const blackInitialTimeRef = useRef(180.0)
 
   const handlePieceMouseDown = (e, row, col) => {
     e.preventDefault()
@@ -553,8 +567,36 @@ function App() {
       try {
         const data = JSON.parse(event.data)
         if (data.type === 'board_state') {
+          const previousTurn = boardState?.current_turn
           setBoardState(data)
           setGameState('playing')
+
+          // Update timer initial values from server
+          if (data.white_time !== undefined) {
+            whiteInitialTimeRef.current = data.white_time
+            // Only update display time for the non-active player
+            if (data.current_turn !== 'white') {
+              setWhiteTime(data.white_time)
+            }
+          }
+          if (data.black_time !== undefined) {
+            blackInitialTimeRef.current = data.black_time
+            // Only update display time for the non-active player
+            if (data.current_turn !== 'black') {
+              setBlackTime(data.black_time)
+            }
+          }
+
+          // Reset start time when turn changes or on initial board state
+          if (previousTurn !== data.current_turn || !previousTurn) {
+            if (data.current_turn === 'white') {
+              whiteStartTimeRef.current = Date.now()
+              blackStartTimeRef.current = null
+            } else {
+              blackStartTimeRef.current = Date.now()
+              whiteStartTimeRef.current = null
+            }
+          }
         } else if (data.type === 'game_over') {
           setGameOver({
             result: data.result,
@@ -610,6 +652,57 @@ function App() {
       previousBoardStateRef.current = boardState
     }
   }, [boardState, premove])
+
+  useEffect(() => {
+    // Timer countdown logic using requestAnimationFrame for smooth updates
+    let animationFrame = null
+
+    const updateTimer = () => {
+      if (!boardState || gameOver) return
+
+      // Update white timer if it's white's turn
+      if (boardState.current_turn === 'white' && whiteStartTimeRef.current) {
+        const elapsed = (Date.now() - whiteStartTimeRef.current) / 1000
+        const remaining = Math.max(0, whiteInitialTimeRef.current - elapsed)
+        setWhiteTime(remaining)
+      }
+
+      // Update black timer if it's black's turn
+      if (boardState.current_turn === 'black' && blackStartTimeRef.current) {
+        const elapsed = (Date.now() - blackStartTimeRef.current) / 1000
+        const remaining = Math.max(0, blackInitialTimeRef.current - elapsed)
+        setBlackTime(remaining)
+      }
+
+      // Continue animation loop
+      if (gameState === 'playing' && !gameOver) {
+        animationFrame = requestAnimationFrame(updateTimer)
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (animationFrame) {
+          cancelAnimationFrame(animationFrame)
+          animationFrame = null
+        }
+      } else if (gameState === 'playing' && !gameOver) {
+        updateTimer()
+      }
+    }
+
+    if (gameState === 'playing' && boardState && !gameOver) {
+      updateTimer()
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+    }
+
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame)
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [gameState, boardState, gameOver])
 
   useEffect(() => {
     // Cleanup on unmount
@@ -724,8 +817,48 @@ function App() {
           onMouseUp={handleMouseUp}
           onMouseLeave={() => setDraggedPiece(null)}
         >
+          {/* Timer for opponent (top) */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.1)',
+            padding: '0.75rem 1.5rem',
+            marginBottom: '0.75rem',
+            borderRadius: '8px',
+            textAlign: 'center',
+            fontFamily: "'Courier New', monospace",
+            fontSize: '1.5rem',
+            fontWeight: 'bold',
+            color: boardState.player_color === 'white'
+              ? (boardState.current_turn === 'black' ? '#ffffff' : '#888888')
+              : (boardState.current_turn === 'white' ? '#ffffff' : '#888888'),
+            border: boardState.current_turn === (boardState.player_color === 'white' ? 'black' : 'white')
+              ? '2px solid #4CAF50'
+              : '2px solid transparent',
+            transition: 'all 0.3s ease'
+          }}>
+            {formatTime(boardState.player_color === 'white' ? blackTime : whiteTime)}
+          </div>
+
           <div ref={boardRef}>
             {renderBoard(boardState, selectedSquare, handleSquareClick, gameOver !== null, draggedPiece, handlePieceMouseDown, premove)}
+          </div>
+
+          {/* Timer for player (bottom) */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.1)',
+            padding: '0.75rem 1.5rem',
+            marginTop: '0.75rem',
+            borderRadius: '8px',
+            textAlign: 'center',
+            fontFamily: "'Courier New', monospace",
+            fontSize: '1.5rem',
+            fontWeight: 'bold',
+            color: boardState.current_turn === boardState.player_color ? '#ffffff' : '#888888',
+            border: boardState.current_turn === boardState.player_color
+              ? '2px solid #4CAF50'
+              : '2px solid transparent',
+            transition: 'all 0.3s ease'
+          }}>
+            {formatTime(boardState.player_color === 'white' ? whiteTime : blackTime)}
           </div>
 
           {/* Render dragged piece at cursor position */}

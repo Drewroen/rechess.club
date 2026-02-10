@@ -236,7 +236,7 @@ class Room:
         self.time_update_task = asyncio.create_task(self._update_time_countdown())
 
     async def _update_time_countdown(self) -> None:
-        """Background task that updates time remaining and broadcasts updates."""
+        """Background task that updates time remaining and checks for time expiration."""
         try:
             while not self.game.is_game_over():
                 await asyncio.sleep(0.1)  # Update every 100ms
@@ -261,9 +261,6 @@ class Room:
                     self.time_remaining[current_color] = 0
                     await self._handle_time_expiration(current_color)
                     break
-
-                # Broadcast time update
-                await self.broadcast_time_update()
         except asyncio.CancelledError:
             # Task was cancelled, clean up
             pass
