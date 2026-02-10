@@ -31,7 +31,11 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
       viewBox={`0 0 ${squareSize * 8} ${squareSize * 8}`}
       style={{
         border: '2px solid #333',
-        filter: isGameOver ? 'grayscale(100%)' : 'none'
+        filter: isGameOver ? 'grayscale(100%)' : 'none',
+        maxWidth: '704px',
+        maxHeight: '704px',
+        width: '100%',
+        height: 'auto'
       }}
     >
       {/* Render checkered board pattern */}
@@ -625,7 +629,8 @@ function App() {
       justifyContent: 'center',
       alignItems: 'center',
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)'
+      background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
+      padding: '1rem'
     }}>
       {gameState === 'landing' && (
         <div style={{
