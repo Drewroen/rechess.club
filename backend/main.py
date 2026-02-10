@@ -2,6 +2,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import List, Dict, Optional
 import uuid
 import json
+import asyncio
+import time
 from chess_game import ChessGame, Color, Position, PieceType, Piece
 
 app = FastAPI()
@@ -13,6 +15,14 @@ class Room:
         self.player2 = player2
         self.game = ChessGame()
         self.premoves: Dict[WebSocket, Dict] = {}  # Store premoves per player
+
+        # Time controls: each player starts with 180 seconds (3 minutes)
+        self.time_remaining: Dict[Color, float] = {
+            Color.WHITE: 180.0,
+            Color.BLACK: 180.0
+        }
+        self.last_move_time: Optional[float] = None  # Timestamp of last move
+        self.time_update_task: Optional[asyncio.Task] = None  # Background task for time updates
 
     async def notify_players(self, message: str) -> None:
         try:
@@ -42,7 +52,9 @@ class Room:
                 },
                 "current_turn": self.game.current_turn.value,
                 "room_id": self.id,
-                "player_color": color.value
+                "player_color": color.value,
+                "white_time": round(self.time_remaining[Color.WHITE], 1),
+                "black_time": round(self.time_remaining[Color.BLACK], 1)
             }
 
             # Add last move information if there is a move history
@@ -214,6 +226,101 @@ class Room:
         # We don't check if it's currently legal, just if it's a possible move for that piece type
         return True
 
+    async def start_time_tracking(self) -> None:
+        """Start tracking time for the current player's turn."""
+        self.last_move_time = time.time()
+
+        # Start background task to update time
+        if self.time_update_task:
+            self.time_update_task.cancel()
+        self.time_update_task = asyncio.create_task(self._update_time_countdown())
+
+    async def _update_time_countdown(self) -> None:
+        """Background task that updates time remaining and broadcasts updates."""
+        try:
+            while not self.game.is_game_over():
+                await asyncio.sleep(0.1)  # Update every 100ms
+
+                if self.last_move_time is None:
+                    continue
+
+                # Calculate elapsed time since last move
+                current_time = time.time()
+                elapsed = current_time - self.last_move_time
+
+                # Subtract from current player's time (round down to nearest tenth)
+                current_color = self.game.current_turn
+                new_time = self.time_remaining[current_color] - elapsed
+                self.time_remaining[current_color] = max(0, round(new_time, 1))
+
+                # Reset the last move time to current time for next iteration
+                self.last_move_time = current_time
+
+                # Check if time expired
+                if self.time_remaining[current_color] <= 0:
+                    self.time_remaining[current_color] = 0
+                    await self._handle_time_expiration(current_color)
+                    break
+
+                # Broadcast time update
+                await self.broadcast_time_update()
+        except asyncio.CancelledError:
+            # Task was cancelled, clean up
+            pass
+
+    async def broadcast_time_update(self) -> None:
+        """Send time update to both players without full board state."""
+        time_update = {
+            "type": "time_update",
+            "white_time": round(self.time_remaining[Color.WHITE], 1),
+            "black_time": round(self.time_remaining[Color.BLACK], 1)
+        }
+        message = json.dumps(time_update)
+
+        try:
+            await self.player1.send_text(message)
+        except RuntimeError:
+            pass
+
+        try:
+            await self.player2.send_text(message)
+        except RuntimeError:
+            pass
+
+    async def _handle_time_expiration(self, color: Color) -> None:
+        """Handle when a player runs out of time."""
+        winner_color = color.opposite()
+        await self.notify_players(json.dumps({
+            "type": "game_over",
+            "result": f"{winner_color.value} wins on time",
+            "is_checkmate": False,
+            "is_stalemate": False
+        }))
+
+    def subtract_time_for_move(self, is_premove: bool = False) -> None:
+        """Subtract time from the player who just moved."""
+        if self.last_move_time is None:
+            # First move of the game, just set the time
+            self.last_move_time = time.time()
+            return
+
+        # Calculate elapsed time since last move
+        current_time = time.time()
+        elapsed = current_time - self.last_move_time
+
+        # Get the player who just moved (opposite of current turn since turn already switched)
+        player_who_moved = self.game.current_turn.opposite()
+
+        if is_premove:
+            # Premove: subtract only 0.1 seconds
+            self.time_remaining[player_who_moved] = max(0, round(self.time_remaining[player_who_moved] - 0.1, 1))
+        else:
+            # Regular move: subtract elapsed time
+            self.time_remaining[player_who_moved] = max(0, round(self.time_remaining[player_who_moved] - elapsed, 1))
+
+        # Reset last move time to now for the next player
+        self.last_move_time = current_time
+
 class ConnectionManager:
     def __init__(self) -> None:
         self.queue: List[WebSocket] = []
@@ -239,6 +346,8 @@ class ConnectionManager:
 
                 await room.notify_players(f"Match found! Room ID: {room.id}")
                 await room.broadcast_board_state()
+                # Start time tracking for the game
+                await room.start_time_tracking()
             else:
                 # Put back valid connections to queue
                 if player1.client_state.value == 1:
@@ -258,6 +367,10 @@ class ConnectionManager:
             room = self.rooms.get(room_id)
 
             if room:
+                # Cancel time tracking task
+                if room.time_update_task:
+                    room.time_update_task.cancel()
+
                 # Only send resignation message if the game wasn't already over
                 if not room.game.is_game_over():
                     # Determine winner (the player who stayed connected)
@@ -364,6 +477,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 success = room.game.make_move(from_pos, to_pos, promotion)
 
                 if success:
+                    # Subtract time for regular move
+                    room.subtract_time_for_move(is_premove=False)
+
                     # Clear the premove for the player who just moved
                     if websocket in room.premoves:
                         del room.premoves[websocket]
@@ -373,6 +489,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
                     # Check for game over (checkmate or stalemate)
                     if room.game.is_game_over():
+                        # Cancel time tracking task
+                        if room.time_update_task:
+                            room.time_update_task.cancel()
+
                         game_result = room.game.get_game_result()
                         await room.notify_players(json.dumps({
                             "type": "game_over",
@@ -407,11 +527,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                 del room.premoves[opponent]
 
                                 if premove_success:
+                                    # Subtract time for premove (0.1 seconds)
+                                    room.subtract_time_for_move(is_premove=True)
+
                                     # Broadcast the new board state
                                     await room.broadcast_board_state()
 
                                     # Check for game over after premove
                                     if room.game.is_game_over():
+                                        # Cancel time tracking task
+                                        if room.time_update_task:
+                                            room.time_update_task.cancel()
+
                                         game_result = room.game.get_game_result()
                                         await room.notify_players(json.dumps({
                                             "type": "game_over",
