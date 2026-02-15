@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Run tests with coverage and generate HTML report
-pytest --cov=. --cov-report=html --cov-report=term-missing
+uv run pytest --cov=. --cov-report=html --cov-report=term-missing
 
 # Open the HTML report in the default browser (optional)
 if [ -f "htmlcov/index.html" ]; then

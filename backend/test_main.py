@@ -1,5 +1,6 @@
 import pytest
 import json
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from main import Room, ConnectionManager
 from chess_game import ChessGame, Position, Piece, PieceType, Color
@@ -68,6 +69,23 @@ class TestRoom:
 
         # Player1 should still receive the message
         assert "Test message" in player1.messages_sent
+
+    @pytest.mark.asyncio
+    async def test_notify_players_both_disconnected(self):
+        """Test that notify_players handles both players disconnected."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+
+        # Make both players raise RuntimeError when sending
+        async def raise_error(msg):
+            raise RuntimeError("Connection closed")
+        player1.send_text = raise_error
+        player2.send_text = raise_error
+
+        room = Room(player1, player2)
+
+        # Should not raise exception
+        await room.notify_players("Test message")
 
     @pytest.mark.asyncio
     async def test_broadcast_board_state_structure(self):
@@ -525,3 +543,631 @@ class TestChessGameEdgeCases:
         assert "♚" in board_str  # Black king
         assert "♙" in board_str  # White pawn
         assert "♟" in board_str  # Black pawn
+
+
+class TestRoomExtended:
+    """Extended test suite for Room class covering additional functionality."""
+
+    def test_set_player_name(self):
+        """Test that set_player_name correctly updates player names."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # Set names
+        room.set_player_name(player1, "Alice")
+        room.set_player_name(player2, "Bob")
+
+        assert room.player_names[player1] == "Alice"
+        assert room.player_names[player2] == "Bob"
+
+    def test_set_player_name_with_empty_string(self):
+        """Test that empty names default to Guest."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        room.set_player_name(player1, "")
+        room.set_player_name(player2, "   ")
+
+        assert room.player_names[player1] == "Guest"
+        assert room.player_names[player2] == "Guest"
+
+    def test_is_valid_premove_with_valid_piece(self):
+        """Test is_valid_premove with a valid piece."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        from_pos = Position.from_algebraic("e2")
+        to_pos = Position.from_algebraic("e4")
+
+        # White pawn at e2 belongs to player1 (white)
+        assert room.is_valid_premove(from_pos, to_pos, Color.WHITE)
+
+    def test_is_valid_premove_with_no_piece(self):
+        """Test is_valid_premove with no piece at from position."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        from_pos = Position.from_algebraic("e4")  # Empty square
+        to_pos = Position.from_algebraic("e5")
+
+        assert not room.is_valid_premove(from_pos, to_pos, Color.WHITE)
+
+    def test_is_valid_premove_with_wrong_color(self):
+        """Test is_valid_premove with opponent's piece."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        from_pos = Position.from_algebraic("e7")  # Black pawn
+        to_pos = Position.from_algebraic("e5")
+
+        # Trying to premove black piece as white
+        assert not room.is_valid_premove(from_pos, to_pos, Color.WHITE)
+
+    def test_is_valid_premove_with_invalid_positions(self):
+        """Test is_valid_premove with invalid positions."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        from_pos = Position(-1, 0)  # Invalid position
+        to_pos = Position.from_algebraic("e4")
+
+        assert not room.is_valid_premove(from_pos, to_pos, Color.WHITE)
+
+    def test_is_valid_premove_with_invalid_to_position(self):
+        """Test is_valid_premove with invalid to position."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        from_pos = Position.from_algebraic("e2")
+        to_pos = Position(10, 10)  # Invalid position
+
+        assert not room.is_valid_premove(from_pos, to_pos, Color.WHITE)
+
+    def test_get_theoretical_moves_pawn(self):
+        """Test _get_theoretical_moves for pawns."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # White pawn at e2
+        from_pos = Position.from_algebraic("e2")
+        piece = room.game.get_piece(from_pos)
+
+        moves = room._get_theoretical_moves(from_pos, piece)
+
+        # Should include forward moves and diagonal captures
+        assert Position.from_algebraic("e3") in moves  # One forward
+        assert Position.from_algebraic("e4") in moves  # Two forward (hasn't moved)
+        assert Position.from_algebraic("d3") in moves  # Diagonal left
+        assert Position.from_algebraic("f3") in moves  # Diagonal right
+
+    def test_get_theoretical_moves_knight(self):
+        """Test _get_theoretical_moves for knights."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # White knight at b1
+        from_pos = Position.from_algebraic("b1")
+        piece = room.game.get_piece(from_pos)
+
+        moves = room._get_theoretical_moves(from_pos, piece)
+
+        # Knights have L-shaped moves
+        assert Position.from_algebraic("a3") in moves
+        assert Position.from_algebraic("c3") in moves
+        assert Position.from_algebraic("d2") in moves
+
+    def test_get_theoretical_moves_rook(self):
+        """Test _get_theoretical_moves for rooks."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # Create a rook on d4
+        room.game.board.clear()
+        from_pos = Position.from_algebraic("d4")
+        piece = Piece(PieceType.ROOK, Color.WHITE)
+        room.game.board[from_pos] = piece
+
+        moves = room._get_theoretical_moves(from_pos, piece)
+
+        # Rook should have all horizontal and vertical moves
+        assert Position.from_algebraic("d1") in moves
+        assert Position.from_algebraic("d8") in moves
+        assert Position.from_algebraic("a4") in moves
+        assert Position.from_algebraic("h4") in moves
+        assert len(moves) == 14  # 7 vertical + 7 horizontal
+
+    def test_get_theoretical_moves_bishop(self):
+        """Test _get_theoretical_moves for bishops."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # Create a bishop on d4
+        room.game.board.clear()
+        from_pos = Position.from_algebraic("d4")
+        piece = Piece(PieceType.BISHOP, Color.WHITE)
+        room.game.board[from_pos] = piece
+
+        moves = room._get_theoretical_moves(from_pos, piece)
+
+        # Bishop should have all diagonal moves
+        assert Position.from_algebraic("a1") in moves
+        assert Position.from_algebraic("g7") in moves
+        assert Position.from_algebraic("a7") in moves
+        assert Position.from_algebraic("g1") in moves
+        assert len(moves) == 13  # All diagonal squares from d4
+
+    def test_get_theoretical_moves_queen(self):
+        """Test _get_theoretical_moves for queens."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # Create a queen on d4
+        room.game.board.clear()
+        from_pos = Position.from_algebraic("d4")
+        piece = Piece(PieceType.QUEEN, Color.WHITE)
+        room.game.board[from_pos] = piece
+
+        moves = room._get_theoretical_moves(from_pos, piece)
+
+        # Queen should have all horizontal, vertical, and diagonal moves
+        assert Position.from_algebraic("d1") in moves  # Vertical
+        assert Position.from_algebraic("a4") in moves  # Horizontal
+        assert Position.from_algebraic("a1") in moves  # Diagonal
+        assert len(moves) == 27  # 14 straight + 13 diagonal
+
+    def test_get_theoretical_moves_king(self):
+        """Test _get_theoretical_moves for kings."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # King at e1
+        from_pos = Position.from_algebraic("e1")
+        piece = room.game.get_piece(from_pos)
+
+        moves = room._get_theoretical_moves(from_pos, piece)
+
+        # King should have moves to adjacent squares
+        assert Position.from_algebraic("d1") in moves
+        assert Position.from_algebraic("f1") in moves
+        assert Position.from_algebraic("d2") in moves
+        assert Position.from_algebraic("e2") in moves
+        assert Position.from_algebraic("f2") in moves
+
+        # Should include castling squares (king hasn't moved)
+        assert Position.from_algebraic("g1") in moves  # Kingside
+        assert Position.from_algebraic("c1") in moves  # Queenside
+
+    def test_get_theoretical_moves_pawn_black(self):
+        """Test _get_theoretical_moves for black pawns (moving down)."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # Black pawn at e7
+        from_pos = Position.from_algebraic("e7")
+        piece = room.game.get_piece(from_pos)
+
+        moves = room._get_theoretical_moves(from_pos, piece)
+
+        # Should move downward (decreasing row)
+        assert Position.from_algebraic("e6") in moves
+        assert Position.from_algebraic("e5") in moves
+        assert Position.from_algebraic("d6") in moves
+        assert Position.from_algebraic("f6") in moves
+
+    @pytest.mark.asyncio
+    async def test_broadcast_with_last_move(self):
+        """Test that broadcast includes last move information."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # Make a move
+        room.game.make_move(Position.from_algebraic("e2"), Position.from_algebraic("e4"))
+
+        player1.messages_sent.clear()
+        player2.messages_sent.clear()
+
+        await room.broadcast_board_state()
+
+        msg = json.loads(player1.messages_sent[0])
+
+        # Should include last_move
+        assert "last_move" in msg
+        assert msg["last_move"]["from"]["row"] == 1
+        assert msg["last_move"]["from"]["col"] == 4
+        assert msg["last_move"]["to"]["row"] == 3
+        assert msg["last_move"]["to"]["col"] == 4
+
+    @pytest.mark.asyncio
+    async def test_broadcast_with_check(self):
+        """Test that broadcast includes check status."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # Set up a check scenario
+        room.game.board.clear()
+        room.game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        room.game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+        room.game.board[Position.from_algebraic("e7")] = Piece(PieceType.ROOK, Color.BLACK)
+        room.game.current_turn = Color.WHITE
+
+        player1.messages_sent.clear()
+        player2.messages_sent.clear()
+
+        await room.broadcast_board_state()
+
+        msg1 = json.loads(player1.messages_sent[0])
+
+        # White should be in check
+        assert msg1.get("in_check") == True
+        assert "king_position" in msg1
+
+    @pytest.mark.asyncio
+    async def test_broadcast_with_opponent_check(self):
+        """Test that broadcast includes opponent check status."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # Set up a scenario where black is in check
+        room.game.board.clear()
+        room.game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        room.game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+        room.game.board[Position.from_algebraic("e2")] = Piece(PieceType.ROOK, Color.WHITE)
+        room.game.current_turn = Color.BLACK
+
+        player1.messages_sent.clear()
+        player2.messages_sent.clear()
+
+        await room.broadcast_board_state()
+
+        msg2 = json.loads(player2.messages_sent[0])
+
+        # Black's perspective - should see they're in check
+        assert msg2.get("in_check") == True
+
+    @pytest.mark.asyncio
+    async def test_broadcast_with_premove_moves(self):
+        """Test that broadcast includes premove_available_moves for waiting player."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        await room.broadcast_board_state()
+
+        msg1 = json.loads(player1.messages_sent[0])
+        msg2 = json.loads(player2.messages_sent[0])
+
+        # White's turn - white gets available_moves, black gets premove_available_moves
+        assert "available_moves" in msg1
+        assert "premove_available_moves" in msg2
+        assert len(msg2["premove_available_moves"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_broadcast_with_disconnected_player(self):
+        """Test broadcast_board_state handles disconnected players."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+
+        # Make player2 raise RuntimeError when sending
+        async def raise_error(msg):
+            raise RuntimeError("Connection closed")
+        player2.send_text = raise_error
+
+        room = Room(player1, player2)
+
+        # Should not raise exception
+        await room.broadcast_board_state()
+
+        # Player1 should still receive the message
+        assert len(player1.messages_sent) > 0
+
+    @pytest.mark.asyncio
+    async def test_start_time_tracking(self):
+        """Test that start_time_tracking initializes time tracking."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        await room.start_time_tracking()
+
+        assert room.last_move_time is not None
+        assert room.time_update_task is not None
+
+    @pytest.mark.asyncio
+    async def test_time_tracking_cancels_previous_task(self):
+        """Test that starting time tracking cancels previous task."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        await room.start_time_tracking()
+        first_task = room.time_update_task
+
+        await room.start_time_tracking()
+        second_task = room.time_update_task
+
+        # Give time for cancellation to process
+        await asyncio.sleep(0.01)
+
+        assert first_task.cancelled()
+        assert second_task is not first_task
+
+    @pytest.mark.asyncio
+    async def test_time_expiration(self):
+        """Test that time expiration ends the game."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        # Set white's time to near zero
+        room.time_remaining[Color.WHITE] = 0.01
+        room.last_move_time = None
+
+        await room.start_time_tracking()
+
+        # Wait for timeout
+        await asyncio.sleep(0.05)
+
+        # Game should be ended
+        assert room.game_ended
+
+        # Players should have received game over message
+        game_over_found = False
+        for msg in player1.messages_sent + player2.messages_sent:
+            try:
+                data = json.loads(msg)
+                if data.get("type") == "game_over":
+                    game_over_found = True
+                    assert "black wins on time" in data["result"]
+            except:
+                pass
+
+        assert game_over_found
+
+    def test_subtract_time_first_move(self):
+        """Test subtract_time_for_move on first move."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        room.last_move_time = None
+        room.subtract_time_for_move()
+
+        # Should just set the time
+        assert room.last_move_time is not None
+
+    def test_subtract_time_regular_move(self):
+        """Test subtract_time_for_move for regular move."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        import time
+        initial_time = room.time_remaining[Color.WHITE]
+        room.last_move_time = time.time() - 2.0  # Simulate 2 seconds ago
+        room.game.current_turn = Color.BLACK  # White just moved
+
+        room.subtract_time_for_move(is_premove=False)
+
+        # White should have lost time but gained increment
+        # Lost ~2 seconds, gained 3 seconds (INCREMENT_SECONDS)
+        assert room.time_remaining[Color.WHITE] > initial_time
+
+    def test_subtract_time_premove(self):
+        """Test subtract_time_for_move for premove."""
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+        room = Room(player1, player2)
+
+        import time
+        initial_time = room.time_remaining[Color.WHITE]
+        room.last_move_time = time.time()
+        room.game.current_turn = Color.BLACK  # White just moved
+
+        room.subtract_time_for_move(is_premove=True)
+
+        # White should have lost 0.1 seconds but gained increment
+        # Lost 0.1, gained 3 (INCREMENT_SECONDS) = net +2.9
+        expected = initial_time - 0.1 + 3.0
+        assert abs(room.time_remaining[Color.WHITE] - expected) < 0.2
+
+
+class TestConnectionManagerExtended:
+    """Extended tests for ConnectionManager."""
+
+    @pytest.mark.asyncio
+    async def test_set_pending_name(self):
+        """Test set_pending_name stores names for queued players."""
+        manager = ConnectionManager()
+        player1 = MockWebSocket()
+
+        await manager.connect(player1)
+        manager.set_pending_name(player1, "Alice")
+
+        assert manager.pending_names[player1] == "Alice"
+
+    @pytest.mark.asyncio
+    async def test_set_pending_name_empty(self):
+        """Test set_pending_name defaults to Guest for empty names."""
+        manager = ConnectionManager()
+        player1 = MockWebSocket()
+
+        await manager.connect(player1)
+        manager.set_pending_name(player1, "")
+
+        assert manager.pending_names[player1] == "Guest"
+
+    @pytest.mark.asyncio
+    async def test_room_creation_with_pending_names(self):
+        """Test that pending names are applied when room is created."""
+        manager = ConnectionManager()
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+
+        manager.set_pending_name(player1, "Alice")
+        await manager.connect(player1)
+
+        manager.set_pending_name(player2, "Bob")
+        await manager.connect(player2)
+
+        # Get the room
+        room_id = manager.websocket_to_room[player1]
+        room = manager.rooms[room_id]
+
+        # Names should be applied
+        assert room.player_names[player1] == "Alice"
+        assert room.player_names[player2] == "Bob"
+
+        # Pending names should be cleared
+        assert player1 not in manager.pending_names
+        assert player2 not in manager.pending_names
+
+    @pytest.mark.asyncio
+    async def test_disconnect_from_queue_clears_pending_name(self):
+        """Test that disconnecting from queue clears pending name."""
+        manager = ConnectionManager()
+        player1 = MockWebSocket()
+
+        await manager.connect(player1)
+        manager.set_pending_name(player1, "Alice")
+
+        await manager.disconnect(player1)
+
+        assert player1 not in manager.pending_names
+
+    @pytest.mark.asyncio
+    async def test_try_create_room_with_one_invalid_connection(self):
+        """Test try_create_room puts valid connections back in queue."""
+        manager = ConnectionManager()
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+
+        # Player1 is disconnected
+        player1.client_state.value = 0
+
+        manager.queue.append(player1)
+        manager.queue.append(player2)
+
+        await manager.try_create_room()
+
+        # No room created
+        assert len(manager.rooms) == 0
+
+        # Player2 should still be in queue, player1 should not
+        assert player2 in manager.queue
+        assert player1 not in manager.queue
+
+    @pytest.mark.asyncio
+    async def test_try_create_room_with_first_player_valid(self):
+        """Test try_create_room puts first player back when second is invalid."""
+        manager = ConnectionManager()
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+
+        # Player2 is disconnected, player1 is connected
+        player2.client_state.value = 0
+
+        manager.queue.append(player1)
+        manager.queue.append(player2)
+
+        await manager.try_create_room()
+
+        # No room created
+        assert len(manager.rooms) == 0
+
+        # Player1 should be back in queue, player2 should not
+        assert player1 in manager.queue
+        assert player2 not in manager.queue
+
+    @pytest.mark.asyncio
+    async def test_disconnect_from_room_cancels_time_task(self):
+        """Test that disconnect cancels the time tracking task."""
+        manager = ConnectionManager()
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+
+        await manager.connect(player1)
+        await manager.connect(player2)
+
+        room_id = manager.websocket_to_room[player1]
+        room = manager.rooms[room_id]
+
+        # Start time tracking
+        await room.start_time_tracking()
+        task = room.time_update_task
+
+        # Disconnect
+        await manager.disconnect(player1)
+
+        # Give time for cancellation to process
+        await asyncio.sleep(0.01)
+
+        # Task should be cancelled
+        assert task.cancelled()
+
+    @pytest.mark.asyncio
+    async def test_disconnect_from_finished_game(self):
+        """Test that disconnect from finished game doesn't send resignation."""
+        manager = ConnectionManager()
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+
+        await manager.connect(player1)
+        await manager.connect(player2)
+
+        room_id = manager.websocket_to_room[player1]
+        room = manager.rooms[room_id]
+
+        # Mark game as over
+        room.game_ended = True
+
+        player1.messages_sent.clear()
+        player2.messages_sent.clear()
+
+        # Disconnect player1
+        await manager.disconnect(player1)
+
+        # Player2 should not receive resignation message
+        for msg in player2.messages_sent:
+            try:
+                data = json.loads(msg)
+                assert "resignation" not in data.get("result", "")
+            except:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_disconnect_with_other_player_connection_error(self):
+        """Test that disconnect handles error when notifying other player."""
+        manager = ConnectionManager()
+        player1 = MockWebSocket()
+        player2 = MockWebSocket()
+
+        await manager.connect(player1)
+        await manager.connect(player2)
+
+        # Make player2 raise error when sending
+        async def raise_error(msg):
+            raise Exception("Connection error")
+        player2.send_text = raise_error
+
+        # Should not raise exception when disconnecting player1
+        await manager.disconnect(player1)
+
+        # Room should still be cleaned up
+        assert len(manager.rooms) == 0

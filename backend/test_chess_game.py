@@ -588,6 +588,228 @@ class TestGameState:
         assert game.get_game_result() is None
 
 
+class TestPieceDisplay:
+    """Test suite for piece string representation."""
+
+    @pytest.mark.parametrize("piece_type,color,expected_symbol", [
+        (PieceType.KING, Color.WHITE, "♔"),
+        (PieceType.QUEEN, Color.WHITE, "♕"),
+        (PieceType.ROOK, Color.WHITE, "♖"),
+        (PieceType.BISHOP, Color.WHITE, "♗"),
+        (PieceType.KNIGHT, Color.WHITE, "♘"),
+        (PieceType.PAWN, Color.WHITE, "♙"),
+        (PieceType.KING, Color.BLACK, "♚"),
+        (PieceType.QUEEN, Color.BLACK, "♛"),
+        (PieceType.ROOK, Color.BLACK, "♜"),
+        (PieceType.BISHOP, Color.BLACK, "♝"),
+        (PieceType.KNIGHT, Color.BLACK, "♞"),
+        (PieceType.PAWN, Color.BLACK, "♟"),
+    ])
+    def test_piece_string_representation(self, piece_type, color, expected_symbol):
+        """Test that pieces display correct Unicode symbols."""
+        piece = Piece(piece_type, color)
+        assert str(piece) == expected_symbol
+
+
+class TestPositionHashing:
+    """Test suite for Position hashing."""
+
+    def test_position_hash(self):
+        """Test that positions can be hashed and used in sets/dicts."""
+        pos1 = Position(3, 4)
+        pos2 = Position(3, 4)
+        pos3 = Position(4, 3)
+
+        # Same positions should have same hash
+        assert hash(pos1) == hash(pos2)
+
+        # Different positions should (likely) have different hash
+        assert hash(pos1) != hash(pos3)
+
+        # Positions should work in sets
+        position_set = {pos1, pos2, pos3}
+        assert len(position_set) == 2  # pos1 and pos2 are equal
+
+
+class TestBoardDisplay:
+    """Test suite for board display."""
+
+    def test_display_board_initial_position(self):
+        """Test that display_board returns correct string representation."""
+        game = ChessGame()
+        board_str = game.display_board()
+
+        # Check that it contains coordinate labels
+        assert "a b c d e f g h" in board_str
+        assert "1 " in board_str
+        assert "8 " in board_str
+
+        # Check that it contains piece symbols
+        assert "♖" in board_str  # White rook
+        assert "♔" in board_str  # White king
+        assert "♜" in board_str  # Black rook
+        assert "♚" in board_str  # Black king
+
+        # Check for empty squares (dots)
+        assert "." in board_str
+
+    def test_display_board_custom_position(self):
+        """Test display_board with a custom position."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("e4")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+
+        board_str = game.display_board()
+
+        # Should contain both kings
+        assert "♔" in board_str
+        assert "♚" in board_str
+
+        # Should contain mostly empty squares
+        assert board_str.count(".") > 50  # Most squares empty
+
+
+class TestEnPassantEdgeCases:
+    """Test suite for en passant edge cases."""
+
+    def test_en_passant_capture_removes_correct_pawn(self):
+        """Test that en passant removes the captured pawn from board."""
+        game = ChessGame()
+        # Set up en passant scenario
+        game.make_move(Position.from_algebraic("e2"), Position.from_algebraic("e4"))
+        game.make_move(Position.from_algebraic("a7"), Position.from_algebraic("a6"))
+        game.make_move(Position.from_algebraic("e4"), Position.from_algebraic("e5"))
+        game.make_move(Position.from_algebraic("d7"), Position.from_algebraic("d5"))
+
+        # Perform en passant capture
+        assert game.make_move(Position.from_algebraic("e5"), Position.from_algebraic("d6"))
+
+        # Check that the captured pawn is gone
+        assert game.get_piece(Position.from_algebraic("d5")) is None
+        # Check that capturing pawn is in correct position
+        assert game.get_piece(Position.from_algebraic("d6")) is not None
+        assert game.get_piece(Position.from_algebraic("d6")).piece_type == PieceType.PAWN
+
+
+class TestWrongTurnMoves:
+    """Test suite for attempting moves on wrong turn."""
+
+    def test_cannot_move_opponent_piece(self):
+        """Test that you cannot move opponent's pieces."""
+        game = ChessGame()
+        # It's white's turn, try to move black piece
+        moves = game.get_possible_moves(Position.from_algebraic("e7"))
+        assert len(moves) == 0
+
+        # Try to actually make the move
+        result = game.make_move(Position.from_algebraic("e7"), Position.from_algebraic("e5"))
+        assert result is False
+
+
+class TestEmptySquareMoves:
+    """Test suite for handling empty squares."""
+
+    def test_cannot_move_from_empty_square(self):
+        """Test that attempting to move from empty square returns no moves."""
+        game = ChessGame()
+        moves = game.get_possible_moves(Position.from_algebraic("e4"))
+        assert len(moves) == 0
+
+    def test_make_move_from_empty_square_fails(self):
+        """Test that make_move fails when source square is empty."""
+        game = ChessGame()
+        result = game.make_move(Position.from_algebraic("e4"), Position.from_algebraic("e5"))
+        assert result is False
+
+
+class TestCheckEdgeCases:
+    """Test suite for edge cases in check detection."""
+
+    def test_is_in_check_with_no_king(self):
+        """Test is_in_check when king is missing (edge case)."""
+        game = ChessGame()
+        game.board.clear()
+        # No king on board
+        game.board[Position.from_algebraic("e4")] = Piece(PieceType.QUEEN, Color.WHITE)
+
+        # Should return False when king doesn't exist
+        assert game.is_in_check(Color.WHITE) is False
+        assert game.is_in_check(Color.BLACK) is False
+
+
+class TestCheckmateAndStalemateEdgeCases:
+    """Test suite for checkmate and stalemate edge cases."""
+
+    def test_is_checkmate_with_legal_moves_available(self):
+        """Test that checkmate is False when king has legal moves."""
+        game = ChessGame()
+        # Start with standard position - white is not in check or checkmate
+        assert game.is_checkmate() is False
+
+    def test_is_checkmate_when_in_check_but_can_escape(self):
+        """Test that checkmate is False when in check but can move out."""
+        game = ChessGame()
+        game.board.clear()
+        # Set up a position where white king is in check but can escape
+        game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.ROOK, Color.BLACK)
+        game.board[Position.from_algebraic("h8")] = Piece(PieceType.KING, Color.BLACK)
+        game.current_turn = Color.WHITE
+
+        # White is in check but can move to d1, d2, f1, f2
+        assert game.is_in_check(Color.WHITE)
+        assert game.is_checkmate() is False  # Can escape check
+
+    def test_is_stalemate_when_in_check(self):
+        """Test that stalemate is False when player is in check."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.ROOK, Color.BLACK)
+        game.board[Position.from_algebraic("h8")] = Piece(PieceType.KING, Color.BLACK)
+        game.current_turn = Color.WHITE
+
+        # White is in check but not stalemate
+        assert game.is_in_check(Color.WHITE)
+        assert game.is_stalemate() is False
+
+
+class TestInternalMethodEdgeCases:
+    """Test suite for internal method edge cases."""
+
+    def test_execute_move_on_board_with_empty_square(self):
+        """Test _execute_move_on_board handles empty source square gracefully."""
+        game = ChessGame()
+        # Try to execute a move from an empty square
+        # This should not crash - it's a defensive check
+        game._execute_move_on_board(Position.from_algebraic("e4"), Position.from_algebraic("e5"))
+        # No assertion needed - just checking it doesn't crash
+
+    def test_is_position_under_attack_with_invalid_piece_type(self):
+        """Test _is_position_under_attack handles invalid piece types."""
+        game = ChessGame()
+        game.board.clear()
+
+        # Create a piece with an invalid type by directly manipulating the object
+        # This shouldn't normally happen but tests the defensive code path
+        game.board[Position.from_algebraic("e4")] = Piece(PieceType.KING, Color.WHITE)
+        invalid_piece = Piece(PieceType.PAWN, Color.BLACK)
+        # Temporarily change the piece type to something invalid
+        game.board[Position.from_algebraic("d5")] = invalid_piece
+
+        # Manually set piece_type to an invalid value (not an enum member)
+        # This simulates a corrupted piece object
+        class InvalidPieceType:
+            pass
+        invalid_piece.piece_type = InvalidPieceType()
+
+        # Should not crash when checking if position is under attack
+        result = game._is_position_under_attack(Position.from_algebraic("e4"), Color.WHITE)
+        # The method should handle this gracefully
+        assert isinstance(result, bool)
+
+
 class TestPromotedPieceMoves:
     """Test suite for moves of promoted pieces."""
 

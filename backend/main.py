@@ -320,6 +320,7 @@ class ConnectionManager:
         await websocket.accept()
         self.queue.append(websocket)
         await websocket.send_text("Waiting for opponent...")
+        await self.try_create_room()
 
     async def try_create_room(self) -> None:
         """Try to create a room if there are at least 2 players in queue."""
