@@ -234,59 +234,31 @@ class Room:
         """Start tracking time for the current player's turn."""
         self.last_move_time = time.time()
 
-        # Start background task to update time
+        # Cancel previous timeout if exists
         if self.time_update_task:
             self.time_update_task.cancel()
-        self.time_update_task = asyncio.create_task(self._update_time_countdown())
 
-    async def _update_time_countdown(self) -> None:
-        """Background task that updates time remaining and checks for time expiration."""
+        # Schedule timeout for when current player's time expires
+        current_color = self.game.current_turn
+        time_remaining = self.time_remaining[current_color]
+
+        self.time_update_task = asyncio.create_task(
+            self._sleep_until_timeout(time_remaining, current_color)
+        )
+
+    async def _sleep_until_timeout(self, duration: float, color: Color) -> None:
+        """Sleep until the player's time expires, then end the game."""
         try:
-            while not self.game.is_game_over():
-                await asyncio.sleep(0.1)  # Update every 100ms
+            await asyncio.sleep(duration)
 
-                if self.last_move_time is None:
-                    continue
+            # Time expired
+            self.time_remaining[color] = 0
+            await self._handle_time_expiration(color)
 
-                # Calculate elapsed time since last move
-                current_time = time.time()
-                elapsed = current_time - self.last_move_time
-
-                # Subtract from current player's time (round down to nearest tenth)
-                current_color = self.game.current_turn
-                new_time = self.time_remaining[current_color] - elapsed
-                self.time_remaining[current_color] = max(0, round(new_time, 1))
-
-                # Reset the last move time to current time for next iteration
-                self.last_move_time = current_time
-
-                # Check if time expired
-                if self.time_remaining[current_color] <= 0:
-                    self.time_remaining[current_color] = 0
-                    await self._handle_time_expiration(current_color)
-                    break
         except asyncio.CancelledError:
-            # Task was cancelled, clean up
+            # Player made a move before timeout - that's expected
             pass
 
-    async def broadcast_time_update(self) -> None:
-        """Send time update to both players without full board state."""
-        time_update = {
-            "type": "time_update",
-            "white_time": round(self.time_remaining[Color.WHITE], 1),
-            "black_time": round(self.time_remaining[Color.BLACK], 1)
-        }
-        message = json.dumps(time_update)
-
-        try:
-            await self.player1.send_text(message)
-        except RuntimeError:
-            pass
-
-        try:
-            await self.player2.send_text(message)
-        except RuntimeError:
-            pass
 
     async def _handle_time_expiration(self, color: Color) -> None:
         """Handle when a player runs out of time."""
@@ -300,7 +272,7 @@ class Room:
         }))
 
     def subtract_time_for_move(self, is_premove: bool = False) -> None:
-        """Subtract time from the player who just moved."""
+        """Subtract time from the player who just moved and add increment."""
         if self.last_move_time is None:
             # First move of the game, just set the time
             self.last_move_time = time.time()
@@ -314,11 +286,14 @@ class Room:
         player_who_moved = self.game.current_turn.opposite()
 
         if is_premove:
-            # Premove: subtract only 0.1 seconds
+            # Premove: subtract 0.1 seconds
             self.time_remaining[player_who_moved] = max(0, round(self.time_remaining[player_who_moved] - 0.1, 1))
         else:
             # Regular move: subtract elapsed time
             self.time_remaining[player_who_moved] = max(0, round(self.time_remaining[player_who_moved] - elapsed, 1))
+
+        # Add 3 second increment after every move
+        self.time_remaining[player_who_moved] = round(self.time_remaining[player_who_moved] + 3.0, 1)
 
         # Reset last move time to now for the next player
         self.last_move_time = current_time
@@ -505,6 +480,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                             "is_stalemate": room.game.is_stalemate()
                         }))
                     else:
+                        # Restart time tracking for the next player
+                        await room.start_time_tracking()
                         # Check if the opponent has a premove
                         opponent = room.player2 if websocket == room.player1 else room.player1
                         if opponent in room.premoves:
@@ -551,6 +528,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                                             "is_checkmate": room.game.is_checkmate(),
                                             "is_stalemate": room.game.is_stalemate()
                                         }))
+                                    else:
+                                        # Restart time tracking for the next player
+                                        await room.start_time_tracking()
                             except (KeyError, TypeError):
                                 # Invalid premove data, just clear it
                                 if opponent in room.premoves:
