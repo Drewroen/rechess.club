@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Deploy
 
 on:
   push:
@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  build-frontend:
     runs-on: ubuntu-latest
 
     steps:
@@ -49,13 +49,104 @@ jobs:
         with:
           path: frontend/dist
 
-  deploy:
+  deploy-frontend:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-frontend
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  deploy-backend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Linode
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LINODE_HOST }}
+          username: ${{ secrets.LINODE_USERNAME }}
+          password: ${{ secrets.LINODE_PASSWORD }}
+          script: |
+            set -e
+
+            echo "Starting deployment process..."
+
+            # Navigate to app directory (adjust path as needed)
+            echo "Navigating to application directory..."
+            cd ~/rechess.club
+
+            # Pull latest changes
+            echo "Pulling latest changes from the main branch..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Navigate to backend directory
+            echo "Navigating to backend directory..."
+            cd backend
+
+            # Install/update dependencies
+            echo "Installing/updating dependencies..."
+            ~/.local/bin/uv sync
+
+            # Stop existing server if running
+            echo "Stopping existing server if running..."
+            if [ -f ~/rechess-club-server.pid ]; then
+              PID=$(cat ~/rechess-club-server.pid)
+              if kill -0 "$PID" 2>/dev/null; then
+                echo "Stopping process $PID"
+                kill "$PID"
+                sleep 3
+                if kill -0 "$PID" 2>/dev/null; then
+                  echo "Process still running, force killing"
+                  kill -9 "$PID"
+                fi
+              fi
+              rm -f ~/rechess-club-server.pid
+            else
+              echo "No PID file found."
+            fi
+
+            # Update nginx configuration
+            echo "Updating nginx configuration..."
+            # Remove ALL existing configurations from sites-enabled to prevent conflicts
+            sudo rm -f /etc/nginx/sites-enabled/*
+            # Copy new configuration
+            sudo cp ../nginx.conf /etc/nginx/sites-available/rechess.club
+            sudo ln -sf /etc/nginx/sites-available/rechess.club /etc/nginx/sites-enabled/rechess.club
+
+            # Test nginx configuration
+            echo "Testing nginx configuration..."
+            sudo nginx -t
+
+            # Reload nginx
+            echo "Reloading nginx..."
+            sudo systemctl reload nginx
+
+            # Set up environment variables
+            echo "Setting up environment variables..."
+            cat > .env << EOF
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+            JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+
+            GOOGLE_CLIENT_ID=887437025978-nreqqr1kveoctq5d6r5qnmfluioc42se.apps.googleusercontent.com
+            GOOGLE_REDIRECT_URI=https://api.rechess.club/auth/callback
+            JWT_ALGORITHM=HS256
+            JWT_EXPIRATION_HOURS=24
+            FRONTEND_URL=https://rechess.club
+            COOKIE_DOMAIN=.rechess.club
+            EOF
+
+            # Start the backend server in background with PID tracking
+            echo "Starting the backend server..."
+            nohup ~/.local/bin/uv run uvicorn main:app --host 0.0.0.0 --port 8000 > ~/rechess-club-server.log 2>&1 &
+            echo $! > ~/rechess-club-server.pid
+
+            echo "Deployment completed successfully"
