@@ -7,7 +7,8 @@ import time
 from chess_game import ChessGame, Color, Position, PieceType, Piece
 
 # Time control configuration
-STARTING_TIME_SECONDS = 10.0
+STARTING_TIME_SECONDS = 180.0  # Initial time for each player in seconds
+INCREMENT_SECONDS = 3.0  # Time added after each move in seconds
 
 app = FastAPI()
 
@@ -19,6 +20,7 @@ class Room:
         self.game = ChessGame()
         self.premoves: Dict[WebSocket, Dict] = {}  # Store premoves per player
         self.game_ended = False  # Track if game has ended by any means
+        self.player_names: Dict[WebSocket, str] = {player1: "Guest", player2: "Guest"}  # Store player names
 
         # Time controls: each player starts with configured time
         self.time_remaining: Dict[Color, float] = {
@@ -45,6 +47,9 @@ class Room:
             # Create a snapshot of the board to avoid dictionary modification during iteration
             board_snapshot = list(self.game.board.items())
 
+            # Get opponent websocket
+            opponent = self.player2 if player == self.player1 else self.player1
+
             board_state = {
                 "type": "board_state",
                 "board": {
@@ -57,6 +62,7 @@ class Room:
                 "current_turn": self.game.current_turn.value,
                 "room_id": self.id,
                 "player_color": color.value,
+                "opponent_name": self.player_names[opponent],
                 "white_time": round(self.time_remaining[Color.WHITE], 1),
                 "black_time": round(self.time_remaining[Color.BLACK], 1)
             }
@@ -128,6 +134,11 @@ class Room:
         elif websocket == self.player2:
             return Color.BLACK
         return None
+
+    def set_player_name(self, websocket: WebSocket, name: str) -> None:
+        """Set the name for a player."""
+        if websocket in self.player_names:
+            self.player_names[websocket] = name if name.strip() else "Guest"
 
     def _get_theoretical_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
         """Get all theoretical moves for a piece (for premove suggestions).
@@ -292,8 +303,8 @@ class Room:
             # Regular move: subtract elapsed time
             self.time_remaining[player_who_moved] = max(0, round(self.time_remaining[player_who_moved] - elapsed, 1))
 
-        # Add 3 second increment after every move
-        self.time_remaining[player_who_moved] = round(self.time_remaining[player_who_moved] + 3.0, 1)
+        # Add increment after every move
+        self.time_remaining[player_who_moved] = round(self.time_remaining[player_who_moved] + INCREMENT_SECONDS, 1)
 
         # Reset last move time to now for the next player
         self.last_move_time = current_time
@@ -303,12 +314,15 @@ class ConnectionManager:
         self.queue: List[WebSocket] = []
         self.rooms: Dict[str, Room] = {}
         self.websocket_to_room: Dict[WebSocket, str] = {}
+        self.pending_names: Dict[WebSocket, str] = {}  # Store names before room is created
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()
         self.queue.append(websocket)
         await websocket.send_text("Waiting for opponent...")
 
+    async def try_create_room(self) -> None:
+        """Try to create a room if there are at least 2 players in queue."""
         # Check if we can create a room
         if len(self.queue) >= 2:
             player1 = self.queue.pop(0)
@@ -317,6 +331,15 @@ class ConnectionManager:
             # Validate both connections are still open
             if player1.client_state.value == 1 and player2.client_state.value == 1:
                 room = Room(player1, player2)
+
+                # Set player names if they were provided
+                if player1 in self.pending_names:
+                    room.set_player_name(player1, self.pending_names[player1])
+                    del self.pending_names[player1]
+                if player2 in self.pending_names:
+                    room.set_player_name(player2, self.pending_names[player2])
+                    del self.pending_names[player2]
+
                 self.rooms[room.id] = room
                 self.websocket_to_room[player1] = room.id
                 self.websocket_to_room[player2] = room.id
@@ -332,10 +355,17 @@ class ConnectionManager:
                 if player2.client_state.value == 1:
                     self.queue.insert(0, player2)
 
+    def set_pending_name(self, websocket: WebSocket, name: str) -> None:
+        """Store a player's name while they're in the queue."""
+        self.pending_names[websocket] = name if name.strip() else "Guest"
+
     async def disconnect(self, websocket: WebSocket) -> None:
         # Remove from queue if waiting
         if websocket in self.queue:
             self.queue.remove(websocket)
+            # Clean up pending name
+            if websocket in self.pending_names:
+                del self.pending_names[websocket]
             return
 
         # Close room if in a room
@@ -388,6 +418,25 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             try:
                 message = json.loads(data)
             except json.JSONDecodeError:
+                continue
+
+            # Handle name setting
+            if message.get("type") == "set_name":
+                name = message.get("name", "Guest")
+
+                # Check if player is already in a room
+                room_id = manager.websocket_to_room.get(websocket)
+                if room_id:
+                    room = manager.rooms.get(room_id)
+                    if room:
+                        room.set_player_name(websocket, name)
+                        # Re-broadcast board state with updated name
+                        await room.broadcast_board_state()
+                else:
+                    # Player is in queue, store name for later
+                    manager.set_pending_name(websocket, name)
+                    # Try to create a room now that name is set
+                    await manager.try_create_room()
                 continue
 
             # Handle move requests

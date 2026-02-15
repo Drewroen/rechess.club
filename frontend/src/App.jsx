@@ -38,12 +38,13 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
       height={squareSize * 8}
       viewBox={`0 0 ${squareSize * 8} ${squareSize * 8}`}
       style={{
-        border: '2px solid #333',
+        border: 'none',
         filter: isGameOver ? 'grayscale(100%)' : 'none',
         maxWidth: '704px',
-        maxHeight: '704px',
+        maxHeight: 'min(704px, calc(100vh - 12rem))',
         width: '100%',
-        height: 'auto'
+        height: 'auto',
+        display: 'block'
       }}
     >
       {/* Render checkered board pattern */}
@@ -285,6 +286,12 @@ function App() {
   const [premove, setPremove] = useState(null) // { from: { row, col }, to: { row, col } } or null
   const [whiteTime, setWhiteTime] = useState(180.0) // Timer state for white
   const [blackTime, setBlackTime] = useState(180.0) // Timer state for black
+  const [playerName, setPlayerName] = useState(() => {
+    // Load player name from localStorage, default to 'Guest'
+    return localStorage.getItem('playerName') || 'Guest'
+  }) // Player's name input
+  const [opponentName, setOpponentName] = useState('Guest') // Opponent's name
+  const [inputWidth, setInputWidth] = useState(0) // Track input width
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
   const boardRef = useRef(null)
@@ -293,6 +300,7 @@ function App() {
   const blackStartTimeRef = useRef(null)
   const whiteInitialTimeRef = useRef(180.0)
   const blackInitialTimeRef = useRef(180.0)
+  const measureRef = useRef(null)
 
   const handlePieceMouseDown = (e, row, col) => {
     e.preventDefault()
@@ -559,6 +567,9 @@ function App() {
 
     websocket.onopen = () => {
       console.log('WebSocket connected')
+      // Send player name to backend
+      const name = playerName.trim() || 'Guest'
+      websocket.send(JSON.stringify({ type: 'set_name', name }))
     }
 
     websocket.onmessage = (event) => {
@@ -570,6 +581,11 @@ function App() {
           const previousTurn = boardState?.current_turn
           setBoardState(data)
           setGameState('playing')
+
+          // Set opponent name if provided
+          if (data.opponent_name) {
+            setOpponentName(data.opponent_name)
+          }
 
           // Update timer initial values from server
           if (data.white_time !== undefined) {
@@ -705,6 +721,27 @@ function App() {
   }, [gameState, boardState, gameOver])
 
   useEffect(() => {
+    // Measure the width of the player name text synchronously
+    if (measureRef.current) {
+      const width = measureRef.current.offsetWidth
+      // Use a small buffer to prevent clipping
+      setInputWidth(width)
+    }
+  }, [playerName])
+
+  // Initial measurement
+  useEffect(() => {
+    if (measureRef.current) {
+      setInputWidth(measureRef.current.offsetWidth)
+    }
+  }, [])
+
+  // Save player name to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('playerName', playerName)
+  }, [playerName])
+
+  useEffect(() => {
     // Cleanup on unmount
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -721,15 +758,15 @@ function App() {
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      minHeight: '100vh',
+      height: '100vh',
       background: 'linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)',
-      padding: '1rem'
+      padding: '0'
     }}>
       {gameState === 'landing' && (
         <div style={{
           textAlign: 'center',
           color: 'white',
-          fontFamily: "'Clash Grotesk', sans-serif"
+          fontFamily: "'Manrope', sans-serif"
         }}>
           <h1 style={{
             fontSize: '4rem',
@@ -746,7 +783,7 @@ function App() {
             fontSize: '1.5rem',
             fontWeight: '300',
             marginTop: '0',
-            marginBottom: '0.75rem',
+            marginBottom: '2rem',
             color: '#888888'
           }}>
             Chess.... Redefined.
@@ -756,14 +793,15 @@ function App() {
             style={{
               fontSize: '1.25rem',
               fontWeight: '600',
-              padding: '1rem 3rem',
+              padding: '1rem 5rem',
               background: 'linear-gradient(135deg, #4a4a4a 0%, #6a6a6a 100%)',
               color: 'white',
               border: 'none',
               borderRadius: '50px',
               cursor: 'pointer',
               transition: 'transform 0.2s, box-shadow 0.2s',
-              boxShadow: '0 10px 25px rgba(74, 74, 74, 0.3)'
+              boxShadow: '0 10px 25px rgba(74, 74, 74, 0.3)',
+              marginBottom: '1rem'
             }}
             onMouseOver={(e) => {
               e.target.style.transform = 'translateY(-2px)'
@@ -776,6 +814,64 @@ function App() {
           >
             Play
           </button>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            position: 'relative'
+          }}>
+            <label style={{
+              fontSize: '1.25rem',
+              fontWeight: '400',
+              color: '#888888'
+            }}>
+              Playing as
+            </label>
+            {/* Hidden span to measure text width */}
+            <span
+              ref={measureRef}
+              style={{
+                position: 'absolute',
+                visibility: 'hidden',
+                fontSize: '1.25rem',
+                fontWeight: '400',
+                fontFamily: "'Manrope', sans-serif",
+                whiteSpace: 'pre'
+              }}
+            >
+              {playerName}
+            </span>
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handlePlayClick()
+                }
+              }}
+              style={{
+                fontSize: '1.25rem',
+                fontWeight: '400',
+                padding: '0.25rem 0',
+                background: 'transparent',
+                color: 'white',
+                border: 'none',
+                borderBottom: '2px solid #6a6a6a',
+                width: playerName.trim() ? `${inputWidth + 2}px` : '60px',
+                fontFamily: "'Manrope', sans-serif",
+                outline: 'none',
+                transition: 'border-bottom-color 0.2s'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderBottomColor = '#999999'
+              }}
+              onBlur={(e) => {
+                e.target.style.borderBottomColor = '#6a6a6a'
+              }}
+            />
+          </div>
         </div>
       )}
 
@@ -783,7 +879,7 @@ function App() {
         <div style={{
           textAlign: 'center',
           color: 'white',
-          fontFamily: "'Clash Grotesk', sans-serif"
+          fontFamily: "'Manrope', sans-serif"
         }}>
           <div style={{
             width: '80px',
@@ -819,23 +915,40 @@ function App() {
         >
           {/* Timer for opponent (top) */}
           <div style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            padding: '0.75rem 1.5rem',
-            marginBottom: '0.75rem',
-            borderRadius: '8px',
-            textAlign: 'center',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '1.5rem',
-            fontWeight: 'bold',
-            color: boardState.player_color === 'white'
-              ? (boardState.current_turn === 'black' ? '#ffffff' : '#888888')
-              : (boardState.current_turn === 'white' ? '#ffffff' : '#888888'),
-            border: boardState.current_turn === (boardState.player_color === 'white' ? 'black' : 'white')
-              ? '2px solid #4CAF50'
-              : '2px solid transparent',
-            transition: 'all 0.3s ease'
+            background: '#2b2b2b',
+            padding: '1rem 1.5rem',
+            marginBottom: '0',
+            borderRadius: '4px 4px 0 0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontFamily: "'Manrope', sans-serif",
           }}>
-            {formatTime(boardState.player_color === 'white' ? blackTime : whiteTime)}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem'
+            }}>
+              <div style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: '#ef4444'
+              }} />
+              <span style={{
+                fontSize: '1.25rem',
+                color: '#ffffff',
+                fontWeight: '300'
+              }}>{opponentName}</span>
+            </div>
+            <span style={{
+              fontFamily: "'Manrope', sans-serif",
+              fontSize: '1.5rem',
+              fontWeight: '300',
+              color: '#ffffff'
+            }}>
+              {formatTime(boardState.player_color === 'white' ? blackTime : whiteTime)}
+            </span>
           </div>
 
           <div ref={boardRef}>
@@ -844,21 +957,40 @@ function App() {
 
           {/* Timer for player (bottom) */}
           <div style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            padding: '0.75rem 1.5rem',
-            marginTop: '0.75rem',
-            borderRadius: '8px',
-            textAlign: 'center',
-            fontFamily: "'Courier New', monospace",
-            fontSize: '1.5rem',
-            fontWeight: 'bold',
-            color: boardState.current_turn === boardState.player_color ? '#ffffff' : '#888888',
-            border: boardState.current_turn === boardState.player_color
-              ? '2px solid #4CAF50'
-              : '2px solid transparent',
-            transition: 'all 0.3s ease'
+            background: '#2b2b2b',
+            padding: '1rem 1.5rem',
+            marginTop: '0',
+            borderRadius: '0 0 4px 4px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontFamily: "'Manrope', sans-serif",
           }}>
-            {formatTime(boardState.player_color === 'white' ? whiteTime : blackTime)}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem'
+            }}>
+              <div style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                background: '#22c55e'
+              }} />
+              <span style={{
+                fontSize: '1.25rem',
+                color: '#ffffff',
+                fontWeight: '300'
+              }}>{playerName.trim() || 'Guest'}</span>
+            </div>
+            <span style={{
+              fontFamily: "'Manrope', sans-serif",
+              fontSize: '1.5rem',
+              fontWeight: '300',
+              color: '#ffffff'
+            }}>
+              {formatTime(boardState.player_color === 'white' ? whiteTime : blackTime)}
+            </span>
           </div>
 
           {/* Render dragged piece at cursor position */}
@@ -955,7 +1087,7 @@ function App() {
                 padding: '2rem',
                 borderRadius: '8px',
                 textAlign: 'center',
-                fontFamily: "'Clash Grotesk', sans-serif"
+                fontFamily: "'Manrope', sans-serif"
               }}>
                 <h2 style={{
                   fontSize: '2rem',
