@@ -562,7 +562,9 @@ function App() {
   }
 
   const connect = () => {
-    const websocket = new WebSocket('ws://localhost:8000/ws')
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'localhost:8000'
+    const protocol = backendUrl.includes('localhost') ? 'ws' : 'wss'
+    const websocket = new WebSocket(`${protocol}://${backendUrl}/ws`)
     wsRef.current = websocket
 
     websocket.onopen = () => {
