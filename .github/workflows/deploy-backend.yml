@@ -61,6 +61,10 @@ jobs:
 
             # Update nginx configuration
             echo "Updating nginx configuration..."
+            # Remove any existing conflicting configurations
+            sudo rm -f /etc/nginx/sites-enabled/rechess.club
+            sudo rm -f /etc/nginx/sites-enabled/default
+            # Copy new configuration
             sudo cp ../nginx.conf /etc/nginx/sites-available/rechess.club
             sudo ln -sf /etc/nginx/sites-available/rechess.club /etc/nginx/sites-enabled/rechess.club
 
