@@ -2,6 +2,7 @@ from typing import Optional, List, Tuple, Dict, Set
 from enum import Enum
 from dataclasses import dataclass
 from copy import deepcopy
+import random
 
 
 class PieceType(Enum):
@@ -103,21 +104,53 @@ class ChessGame:
         self._initialize_board()
 
     def _initialize_board(self) -> None:
-        """Set up the initial chess board position."""
+        """Set up the initial chess board position with random layout."""
         # Set up pawns
         for col in range(8):
             self.board[Position(1, col)] = Piece(PieceType.PAWN, Color.WHITE)
             self.board[Position(6, col)] = Piece(PieceType.PAWN, Color.BLACK)
 
-        # Set up back ranks
-        back_rank_order = [
-            PieceType.ROOK, PieceType.KNIGHT, PieceType.BISHOP, PieceType.QUEEN,
-            PieceType.KING, PieceType.BISHOP, PieceType.KNIGHT, PieceType.ROOK
-        ]
+        # Set up back ranks with random layout (mirrored for both colors)
+        back_rank_order = self.generate_random_board_layout()
 
         for col, piece_type in enumerate(back_rank_order):
             self.board[Position(0, col)] = Piece(piece_type, Color.WHITE)
             self.board[Position(7, col)] = Piece(piece_type, Color.BLACK)
+
+    def generate_random_board_layout(self) -> List[PieceType]:
+        """
+        Generate a random board layout for the back row.
+
+        The front row will always be pawns (weight 1).
+        The back row is generated with weighted random selection:
+        - Rook: weight 2
+        - Bishop: weight 2
+        - Knight: weight 2
+        - Queen: weight 1
+        - King: must always be on the board (exactly once)
+
+        Returns:
+            A list of 8 PieceTypes representing the back row layout
+        """
+        # Define weighted pieces (excluding King which is guaranteed)
+        weighted_pieces = [
+            PieceType.ROOK,
+            PieceType.ROOK,  # weight 2
+            PieceType.BISHOP,
+            PieceType.BISHOP,  # weight 2
+            PieceType.KNIGHT,
+            PieceType.KNIGHT,  # weight 2
+            PieceType.QUEEN,  # weight 1
+        ]
+
+        # Generate 7 random pieces for the back row
+        back_row_layout = random.choices(weighted_pieces, k=7)
+
+        # Insert King at a random position
+        king_position = random.randint(0, 7)
+        back_row_layout.insert(king_position, PieceType.KING)
+
+        return back_row_layout
 
     def get_piece(self, pos: Position) -> Optional[Piece]:
         """Get the piece at a given position."""

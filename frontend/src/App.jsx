@@ -277,6 +277,12 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
 }
 
 function App() {
+  const taglinePhrases = [
+    "Chess... Reimagined",
+    "Where Giraffes Run Free",
+    "Does Stockfish Work Here?"
+  ]
+
   const [boardState, setBoardState] = useState(null)
   const [selectedSquare, setSelectedSquare] = useState(null) // { row, col } or null
   const [gameState, setGameState] = useState('landing') // 'landing', 'queue', 'playing'
@@ -292,6 +298,10 @@ function App() {
   }) // Player's name input
   const [opponentName, setOpponentName] = useState('Guest') // Opponent's name
   const [inputWidth, setInputWidth] = useState(0) // Track input width
+  const [tagline] = useState(() => {
+    // Pick a random tagline on component mount
+    return taglinePhrases[Math.floor(Math.random() * taglinePhrases.length)]
+  })
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
   const boardRef = useRef(null)
@@ -301,6 +311,34 @@ function App() {
   const whiteInitialTimeRef = useRef(180.0)
   const blackInitialTimeRef = useRef(180.0)
   const measureRef = useRef(null)
+
+  // Helper function to optimistically update the board when player makes a move
+  const applyMoveOptimistically = (from, to, promotion = null) => {
+    if (!boardState) return
+
+    const newBoard = { ...boardState.board }
+    const fromKey = `${from.row},${from.col}`
+    const toKey = `${to.row},${to.col}`
+
+    // Get the piece being moved
+    const piece = newBoard[fromKey]
+    if (!piece) return
+
+    // Handle promotion
+    const movedPiece = promotion ? { ...piece, piece_type: promotion } : piece
+
+    // Move the piece
+    newBoard[toKey] = movedPiece
+    delete newBoard[fromKey]
+
+    // Update board state with the new board and last move
+    setBoardState(prevState => ({
+      ...prevState,
+      board: newBoard,
+      last_move: { from, to },
+      current_turn: prevState.current_turn === 'white' ? 'black' : 'white'
+    }))
+  }
 
   const cancelPremoveOnBackend = () => {
     // Send cancel_premove message to backend
@@ -454,6 +492,9 @@ function App() {
           to: { row: boardRow, col: boardCol }
         }
 
+        // Optimistically update the board
+        applyMoveOptimistically(moveData.from, moveData.to)
+
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify(moveData))
           console.log('Move sent:', moveData)
@@ -548,6 +589,9 @@ function App() {
         to: { row, col }
       }
 
+      // Optimistically update the board
+      applyMoveOptimistically(moveData.from, moveData.to)
+
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify(moveData))
         console.log('Move sent:', moveData)
@@ -569,6 +613,9 @@ function App() {
       to: promotionPending.to,
       promotion: pieceType
     }
+
+    // Optimistically update the board with promotion
+    applyMoveOptimistically(moveData.from, moveData.to, pieceType)
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(moveData))
@@ -839,7 +886,7 @@ function App() {
             marginBottom: '2rem',
             color: '#888888'
           }}>
-            Chess.... Redefined.
+            {tagline}
           </p>
           <button
             onClick={handlePlayClick}
