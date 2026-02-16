@@ -819,7 +819,7 @@ function App() {
         <div style={{
           textAlign: 'center',
           color: 'white',
-          fontFamily: "'Manrope', sans-serif"
+          fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif"
         }}>
           <h1 style={{
             fontSize: '4rem',
@@ -889,7 +889,7 @@ function App() {
                 visibility: 'hidden',
                 fontSize: '1.25rem',
                 fontWeight: '400',
-                fontFamily: "'Manrope', sans-serif",
+                fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
                 whiteSpace: 'pre'
               }}
             >
@@ -913,7 +913,7 @@ function App() {
                 border: 'none',
                 borderBottom: '2px solid #6a6a6a',
                 width: playerName.trim() ? `${inputWidth + 2}px` : '60px',
-                fontFamily: "'Manrope', sans-serif",
+                fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
                 outline: 'none',
                 transition: 'border-bottom-color 0.2s'
               }}
@@ -932,7 +932,7 @@ function App() {
         <div style={{
           textAlign: 'center',
           color: 'white',
-          fontFamily: "'Manrope', sans-serif"
+          fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif"
         }}>
           <div style={{
             width: '80px',
@@ -975,7 +975,7 @@ function App() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            fontFamily: "'Manrope', sans-serif",
+            fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
           }}>
             <div style={{
               display: 'flex',
@@ -983,14 +983,14 @@ function App() {
               gap: '0.75rem'
             }}>
               <span style={{
-                fontSize: '1.25rem',
+                fontSize: '1rem',
                 color: '#ffffff',
                 fontWeight: '300'
               }}>{opponentName}</span>
             </div>
             <span style={{
-              fontFamily: "'Manrope', sans-serif",
-              fontSize: '1.5rem',
+              fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
+              fontSize: '1rem',
               fontWeight: '300',
               color: '#ffffff'
             }}>
@@ -1011,7 +1011,7 @@ function App() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            fontFamily: "'Manrope', sans-serif",
+            fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
           }}>
             <div style={{
               display: 'flex',
@@ -1019,14 +1019,14 @@ function App() {
               gap: '0.75rem'
             }}>
               <span style={{
-                fontSize: '1.25rem',
+                fontSize: '1rem',
                 color: '#ffffff',
                 fontWeight: '300'
               }}>{playerName.trim() || 'Guest'}</span>
             </div>
             <span style={{
-              fontFamily: "'Manrope', sans-serif",
-              fontSize: '1.5rem',
+              fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
+              fontSize: '1rem',
               fontWeight: '300',
               color: '#ffffff'
             }}>
@@ -1128,7 +1128,7 @@ function App() {
                 padding: '2rem',
                 borderRadius: '8px',
                 textAlign: 'center',
-                fontFamily: "'Manrope', sans-serif"
+                fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif"
               }}>
                 <h2 style={{
                   fontSize: '2rem',
