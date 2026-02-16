@@ -440,6 +440,24 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     await manager.try_create_room()
                 continue
 
+            # Handle cancel premove requests
+            if message.get("type") == "cancel_premove":
+                room_id = manager.websocket_to_room.get(websocket)
+                if not room_id:
+                    continue
+
+                room = manager.rooms.get(room_id)
+                if not room:
+                    continue
+
+                # Clear the premove for this player if one exists
+                if websocket in room.premoves:
+                    del room.premoves[websocket]
+                    await websocket.send_text(json.dumps({
+                        "type": "premove_cancelled"
+                    }))
+                continue
+
             # Handle move requests
             if message.get("type") == "move":
                 room_id = manager.websocket_to_room.get(websocket)

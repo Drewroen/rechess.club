@@ -11,7 +11,7 @@ function formatTime(seconds) {
 }
 
 // Helper function to render board with checkered pattern
-function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = false, draggedPiece = null, onPieceMouseDown = null, premove = null) {
+function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = false, draggedPiece = null, onPiecePointerDown = null, premove = null) {
   if (!boardState || !boardState.board) return null
 
   const board = boardState.board
@@ -266,9 +266,9 @@ function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = fal
             y={svgY}
             width={squareSize}
             height={squareSize}
-            style={{ cursor: 'pointer', pointerEvents: 'all' }}
+            style={{ cursor: 'pointer', pointerEvents: 'all', touchAction: 'none' }}
             onClick={() => onSquareClick(row, col)}
-            onMouseDown={(e) => onPieceMouseDown && onPieceMouseDown(e, row, col)}
+            onPointerDown={(e) => onPiecePointerDown && onPiecePointerDown(e, row, col)}
           />
         )
       })}
@@ -282,7 +282,7 @@ function App() {
   const [gameState, setGameState] = useState('landing') // 'landing', 'queue', 'playing'
   const [promotionPending, setPromotionPending] = useState(null) // { from, to } or null
   const [gameOver, setGameOver] = useState(null) // { result, is_checkmate, is_stalemate } or null
-  const [draggedPiece, setDraggedPiece] = useState(null) // { row, col, piece, clientX, clientY } or null
+  const [draggedPiece, setDraggedPiece] = useState(null) // { row, col, piece, clientX, clientY, startX, startY, hasMoved } or null
   const [premove, setPremove] = useState(null) // { from: { row, col }, to: { row, col } } or null
   const [whiteTime, setWhiteTime] = useState(180.0) // Timer state for white
   const [blackTime, setBlackTime] = useState(180.0) // Timer state for black
@@ -302,7 +302,17 @@ function App() {
   const blackInitialTimeRef = useRef(180.0)
   const measureRef = useRef(null)
 
-  const handlePieceMouseDown = (e, row, col) => {
+  const cancelPremoveOnBackend = () => {
+    // Send cancel_premove message to backend
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'cancel_premove' }))
+      console.log('Premove cancellation sent to backend')
+    }
+    // Clear local premove state
+    setPremove(null)
+  }
+
+  const handlePiecePointerDown = (e, row, col) => {
     e.preventDefault()
     e.stopPropagation()
 
@@ -322,29 +332,44 @@ function App() {
       // Track if this piece was already selected before we started dragging
       const wasAlreadySelected = selectedSquare?.row === row && selectedSquare?.col === col
 
+      // Clear premove if selecting a different piece
+      if (premove && (premove.from.row !== row || premove.from.col !== col)) {
+        cancelPremoveOnBackend()
+      }
+
       setDraggedPiece({
         row,
         col,
         piece,
         clientX: e.clientX,
         clientY: e.clientY,
+        startX: e.clientX,
+        startY: e.clientY,
+        hasMoved: false,
         wasAlreadySelected
       })
       setSelectedSquare({ row, col })
     }
   }
 
-  const handleMouseMove = (e) => {
+  const handlePointerMove = (e) => {
     if (draggedPiece) {
+      const offsetX = e.clientX - draggedPiece.startX
+      const offsetY = e.clientY - draggedPiece.startY
+
+      // Consider it a drag if moved more than 5 pixels
+      const hasMoved = Math.abs(offsetX) > 5 || Math.abs(offsetY) > 5
+
       setDraggedPiece({
         ...draggedPiece,
         clientX: e.clientX,
-        clientY: e.clientY
+        clientY: e.clientY,
+        hasMoved: hasMoved || draggedPiece.hasMoved
       })
     }
   }
 
-  const handleMouseUp = (e) => {
+  const handlePointerUp = (e) => {
     if (!draggedPiece || !boardRef.current) {
       setDraggedPiece(null)
       return
@@ -354,7 +379,7 @@ function App() {
     const rect = boardRef.current.getBoundingClientRect()
     const squareSize = rect.width / 8
 
-    // Calculate which square the mouse is over
+    // Calculate which square the pointer is over
     const isBlack = boardState.player_color === 'black'
     const relativeX = e.clientX - rect.left
     const relativeY = e.clientY - rect.top
@@ -368,13 +393,13 @@ function App() {
       const boardRow = isBlack ? svgRow : 7 - svgRow
       const boardCol = isBlack ? 7 - svgCol : svgCol
 
-      // Check if dropped on the same square it started from
-      if (boardRow === draggedPiece.row && boardCol === draggedPiece.col) {
+      // Check if dropped on the same square it started from or if piece wasn't actually dragged
+      if ((boardRow === draggedPiece.row && boardCol === draggedPiece.col) || !draggedPiece.hasMoved) {
         // Toggle selection: if it was already selected before drag, deselect; otherwise keep selected
         if (draggedPiece.wasAlreadySelected) {
           setSelectedSquare(null)
         }
-        // If it wasn't already selected, it's now selected (from handlePieceMouseDown), so keep it selected
+        // If it wasn't already selected, it's now selected (from handlePiecePointerDown), so keep it selected
         setDraggedPiece(null)
         return
       }
@@ -438,8 +463,9 @@ function App() {
 
         setSelectedSquare(null)
       } else {
-        // Invalid move - deselect the piece
+        // Invalid move - deselect the piece and clear premove
         setSelectedSquare(null)
+        cancelPremoveOnBackend()
       }
     }
 
@@ -459,6 +485,10 @@ function App() {
 
       // Allow selection of player's pieces regardless of turn (for premoves)
       if (piece && piece.color === boardState.player_color) {
+        // Clear premove if selecting a different piece
+        if (premove && (premove.from.row !== row || premove.from.col !== col)) {
+          cancelPremoveOnBackend()
+        }
         setSelectedSquare({ row, col })
       }
     } else {
@@ -502,6 +532,13 @@ function App() {
         }
 
         setSelectedSquare(null)
+        return
+      }
+
+      // If it's not a valid move, clear premove and deselect
+      if (!isValidMove) {
+        setSelectedSquare(null)
+        cancelPremoveOnBackend()
         return
       }
 
@@ -744,6 +781,20 @@ function App() {
   }, [playerName])
 
   useEffect(() => {
+    // Add document-level pointer event listeners for drag handling
+    // This ensures drag continues even if pointer moves outside the component
+    if (draggedPiece) {
+      document.addEventListener('pointermove', handlePointerMove)
+      document.addEventListener('pointerup', handlePointerUp)
+
+      return () => {
+        document.removeEventListener('pointermove', handlePointerMove)
+        document.removeEventListener('pointerup', handlePointerUp)
+      }
+    }
+  }, [draggedPiece])
+
+  useEffect(() => {
     // Cleanup on unmount
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -910,10 +961,10 @@ function App() {
 
       {gameState === 'playing' && boardState && (
         <div
-          style={{ position: 'relative', cursor: draggedPiece ? 'grabbing' : 'default' }}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={() => setDraggedPiece(null)}
+          style={{ position: 'relative', cursor: draggedPiece ? 'grabbing' : 'default', touchAction: 'none' }}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={() => setDraggedPiece(null)}
         >
           {/* Timer for opponent (top) */}
           <div style={{
@@ -954,7 +1005,7 @@ function App() {
           </div>
 
           <div ref={boardRef}>
-            {renderBoard(boardState, selectedSquare, handleSquareClick, gameOver !== null, draggedPiece, handlePieceMouseDown, premove)}
+            {renderBoard(boardState, selectedSquare, handleSquareClick, gameOver !== null, draggedPiece, handlePiecePointerDown, premove)}
           </div>
 
           {/* Timer for player (bottom) */}
