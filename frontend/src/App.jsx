@@ -10,6 +10,33 @@ function formatTime(seconds) {
   return `${mins}:${secs.toString().padStart(2, '0')}.${tenths}`
 }
 
+// Helper function to render captured pieces
+function renderCapturedPieces(capturedPieces) {
+  if (!capturedPieces || capturedPieces.length === 0) return null
+
+  return (
+    <div style={{
+      display: 'flex',
+      gap: '0px',
+      alignItems: 'center'
+    }}>
+      {capturedPieces.map((piece, index) => (
+        <img
+          key={index}
+          src={getPieceSvgPath(piece.piece_type, piece.color)}
+          alt={piece.piece_type}
+          style={{
+            width: '20px',
+            height: '20px',
+            opacity: 0.8,
+            marginLeft: index > 0 ? '-4px' : '0'
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
 // Helper function to render board with checkered pattern
 function renderBoard(boardState, selectedSquare, onSquareClick, isGameOver = false, draggedPiece = null, onPiecePointerDown = null, premove = null) {
   if (!boardState || !boardState.board) return null
@@ -1015,7 +1042,7 @@ function App() {
         >
           {/* Timer for opponent (top) */}
           <div style={{
-            background: '#2b2b2b',
+            background: '#6b7684',
             padding: '1rem 1.5rem',
             marginBottom: '0',
             borderRadius: '4px 4px 0 0',
@@ -1034,6 +1061,7 @@ function App() {
                 color: '#ffffff',
                 fontWeight: '300'
               }}>{opponentName}</span>
+              {boardState.captured_pieces && renderCapturedPieces(boardState.captured_pieces[boardState.player_color])}
             </div>
             <span style={{
               fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
@@ -1051,7 +1079,7 @@ function App() {
 
           {/* Timer for player (bottom) */}
           <div style={{
-            background: '#2b2b2b',
+            background: '#6b7684',
             padding: '1rem 1.5rem',
             marginTop: '0',
             borderRadius: '0 0 4px 4px',
@@ -1070,6 +1098,7 @@ function App() {
                 color: '#ffffff',
                 fontWeight: '300'
               }}>{playerName.trim() || 'Guest'}</span>
+              {boardState.captured_pieces && renderCapturedPieces(boardState.captured_pieces[boardState.player_color === 'white' ? 'black' : 'white'])}
             </div>
             <span style={{
               fontFamily: "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",

@@ -101,6 +101,10 @@ class ChessGame:
         self.current_turn: Color = Color.WHITE
         self.move_history: List[Move] = []
         self.en_passant_target: Optional[Position] = None
+        self.captured_pieces: Dict[Color, List[Piece]] = {
+            Color.WHITE: [],
+            Color.BLACK: []
+        }
         self._initialize_board()
 
     def _initialize_board(self) -> None:
@@ -452,6 +456,10 @@ class ChessGame:
         moved_piece = self.get_piece(to_pos)
         if moved_piece:
             moved_piece.has_moved = True
+
+        # Track captured pieces
+        if captured_piece:
+            self.captured_pieces[captured_piece.color].append(captured_piece)
 
         # Record move and switch turns
         self.move_history.append(move)

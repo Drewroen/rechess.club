@@ -64,7 +64,23 @@ class Room:
                 "player_color": color.value,
                 "opponent_name": self.player_names[opponent],
                 "white_time": round(self.time_remaining[Color.WHITE], 1),
-                "black_time": round(self.time_remaining[Color.BLACK], 1)
+                "black_time": round(self.time_remaining[Color.BLACK], 1),
+                "captured_pieces": {
+                    "white": [
+                        {
+                            "piece_type": piece.piece_type.value if hasattr(piece.piece_type, 'value') else piece.piece_type,
+                            "color": piece.color.value
+                        }
+                        for piece in self.game.captured_pieces[Color.WHITE]
+                    ],
+                    "black": [
+                        {
+                            "piece_type": piece.piece_type.value if hasattr(piece.piece_type, 'value') else piece.piece_type,
+                            "color": piece.color.value
+                        }
+                        for piece in self.game.captured_pieces[Color.BLACK]
+                    ]
+                }
             }
 
             # Add last move information if there is a move history
