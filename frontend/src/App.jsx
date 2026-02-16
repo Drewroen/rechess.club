@@ -982,12 +982,6 @@ function App() {
               alignItems: 'center',
               gap: '0.75rem'
             }}>
-              <div style={{
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                background: '#ef4444'
-              }} />
               <span style={{
                 fontSize: '1.25rem',
                 color: '#ffffff',
@@ -1024,12 +1018,6 @@ function App() {
               alignItems: 'center',
               gap: '0.75rem'
             }}>
-              <div style={{
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                background: '#22c55e'
-              }} />
               <span style={{
                 fontSize: '1.25rem',
                 color: '#ffffff',
