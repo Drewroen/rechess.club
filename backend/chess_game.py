@@ -13,6 +13,8 @@ class PieceType(Enum):
     QUEEN = "queen"
     KING = "king"
     ELEPHANT = "elephant"
+    GIRAFFE = "giraffe"
+    UNICORN = "unicorn"
 
 
 class Color(Enum):
@@ -132,6 +134,9 @@ class ChessGame:
         - Bishop: weight 2
         - Knight: weight 2
         - Queen: weight 1
+        - Elephant: weight 1
+        - Giraffe: weight 1
+        - Unicorn: weight 1
         - King: must always be on the board (exactly once)
 
         Returns:
@@ -147,6 +152,8 @@ class ChessGame:
             PieceType.KNIGHT,  # weight 2
             PieceType.QUEEN,  # weight 1
             PieceType.ELEPHANT,  # weight 1
+            PieceType.GIRAFFE,  # weight 1
+            PieceType.UNICORN,  # weight 1
         ]
 
         # Generate 7 random pieces for the back row
@@ -188,6 +195,10 @@ class ChessGame:
             possible_moves = self._get_king_moves(from_pos, piece)
         elif piece.piece_type == PieceType.ELEPHANT:
             possible_moves = self._get_elephant_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.GIRAFFE:
+            possible_moves = self._get_giraffe_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.UNICORN:
+            possible_moves = self._get_unicorn_moves(from_pos, piece)
         else:
             possible_moves = []
 
@@ -278,6 +289,49 @@ class ChessGame:
                 target_piece = self.get_piece(to_pos)
                 if not target_piece or target_piece.color != piece.color:
                     moves.append(to_pos)
+
+        return moves
+
+    def _get_giraffe_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for a giraffe (4 squares in one direction, 1 in perpendicular)."""
+        moves = []
+        giraffe_offsets = [
+            (4, 1), (4, -1), (-4, 1), (-4, -1),
+            (1, 4), (1, -4), (-1, 4), (-1, -4)
+        ]
+
+        for row_offset, col_offset in giraffe_offsets:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        return moves
+
+    def _get_unicorn_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for a unicorn (nightrider - sliding knight moves)."""
+        moves = []
+        knight_offsets = [
+            (2, 1), (2, -1), (-2, 1), (-2, -1),
+            (1, 2), (1, -2), (-1, 2), (-1, -2)
+        ]
+
+        for row_delta, col_delta in knight_offsets:
+            current_pos = from_pos
+            while True:
+                current_pos = current_pos.offset(row_delta, col_delta)
+                if not current_pos.is_valid():
+                    break
+
+                target_piece = self.get_piece(current_pos)
+                if not target_piece:
+                    moves.append(current_pos)
+                elif target_piece.color != piece.color:
+                    moves.append(current_pos)
+                    break
+                else:
+                    break
 
         return moves
 
@@ -531,6 +585,10 @@ class ChessGame:
                 attacking_moves = self._get_king_attacking_squares(piece_pos, piece)
             elif piece.piece_type == PieceType.ELEPHANT:
                 attacking_moves = self._get_elephant_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.GIRAFFE:
+                attacking_moves = self._get_giraffe_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.UNICORN:
+                attacking_moves = self._get_unicorn_moves(piece_pos, piece)
             else:
                 attacking_moves = []
 

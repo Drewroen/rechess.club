@@ -236,6 +236,41 @@ class Room:
                         break
                     moves.append(current_pos)
 
+        elif piece.piece_type == PieceType.ELEPHANT:
+            # Elephant moves diagonally up to 2 squares
+            directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+            for row_delta, col_delta in directions:
+                for distance in range(1, 3):  # Max 2 squares
+                    to_pos = from_pos.offset(row_delta * distance, col_delta * distance)
+                    if to_pos.is_valid():
+                        moves.append(to_pos)
+
+        elif piece.piece_type == PieceType.GIRAFFE:
+            # Giraffe moves 4 squares in one direction, 1 in perpendicular
+            giraffe_offsets = [
+                (4, 1), (4, -1), (-4, 1), (-4, -1),
+                (1, 4), (1, -4), (-1, 4), (-1, -4)
+            ]
+            for row_offset, col_offset in giraffe_offsets:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+        elif piece.piece_type == PieceType.UNICORN:
+            # Unicorn (nightrider) - sliding knight moves
+            knight_offsets = [
+                (2, 1), (2, -1), (-2, 1), (-2, -1),
+                (1, 2), (1, -2), (-1, 2), (-1, -2)
+            ]
+            for row_delta, col_delta in knight_offsets:
+                current_pos = from_pos
+                # Continue sliding in knight-move increments until we hit the board edge
+                while True:
+                    current_pos = current_pos.offset(row_delta, col_delta)
+                    if not current_pos.is_valid():
+                        break
+                    moves.append(current_pos)
+
         return moves
 
     def is_valid_premove(self, from_pos: Position, to_pos: Position, player_color: Color) -> bool:
