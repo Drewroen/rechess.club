@@ -303,26 +303,54 @@ class Room:
                         moves.append(to_pos)
 
         elif piece.piece_type == PieceType.CHAMPION:
-            # Champion combines knight and rook movements
-            # Knight moves
-            knight_offsets = [
-                (2, 1), (2, -1), (-2, 1), (-2, -1),
-                (1, 2), (1, -2), (-1, 2), (-1, -2)
+            # Champion: jumps 2 squares orthogonally/diagonally or slides 1 square orthogonally
+            # Jump two squares orthogonally
+            orthogonal_jumps = [
+                (2, 0), (-2, 0), (0, 2), (0, -2)
             ]
-            for row_offset, col_offset in knight_offsets:
+            for row_offset, col_offset in orthogonal_jumps:
                 to_pos = from_pos.offset(row_offset, col_offset)
                 if to_pos.is_valid():
                     moves.append(to_pos)
 
-            # Rook moves (horizontal and vertical)
-            rook_directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-            for row_delta, col_delta in rook_directions:
-                current_pos = from_pos
-                while True:
-                    current_pos = current_pos.offset(row_delta, col_delta)
-                    if not current_pos.is_valid():
-                        break
-                    moves.append(current_pos)
+            # Jump two squares diagonally
+            diagonal_jumps = [
+                (2, 2), (2, -2), (-2, 2), (-2, -2)
+            ]
+            for row_offset, col_offset in diagonal_jumps:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+            # Slide one square orthogonally (non-jumping)
+            orthogonal_slides = [
+                (1, 0), (-1, 0), (0, 1), (0, -1)
+            ]
+            for row_offset, col_offset in orthogonal_slides:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+        elif piece.piece_type == PieceType.WIZARD:
+            # Wizard: jumps (1,3) or (3,1) or slides 1 square diagonally
+            # Jump (1,3) or (3,1) squares
+            wizard_jumps = [
+                (1, 3), (1, -3), (-1, 3), (-1, -3),
+                (3, 1), (3, -1), (-3, 1), (-3, -1)
+            ]
+            for row_offset, col_offset in wizard_jumps:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+            # Slide one square diagonally (non-jumping)
+            diagonal_slides = [
+                (1, 1), (1, -1), (-1, 1), (-1, -1)
+            ]
+            for row_offset, col_offset in diagonal_slides:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
 
         return moves
 

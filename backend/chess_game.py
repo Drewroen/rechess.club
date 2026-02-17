@@ -19,6 +19,7 @@ class PieceType(Enum):
     ZEBRA = "zebra"
     CENTAUR = "centaur"
     CHAMPION = "champion"
+    WIZARD = "wizard"
 
 
 class Color(Enum):
@@ -163,6 +164,7 @@ class ChessGame:
             PieceType.ZEBRA,  # weight 1
             PieceType.CENTAUR,  # weight 1
             PieceType.CHAMPION,  # weight 1
+            PieceType.WIZARD,  # weight 1
         ]
 
         # Generate 7 random pieces for the back row
@@ -216,6 +218,8 @@ class ChessGame:
             possible_moves = self._get_centaur_moves(from_pos, piece)
         elif piece.piece_type == PieceType.CHAMPION:
             possible_moves = self._get_champion_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.WIZARD:
+            possible_moves = self._get_wizard_moves(from_pos, piece)
         else:
             possible_moves = []
 
@@ -400,25 +404,75 @@ class ChessGame:
         return moves
 
     def _get_champion_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
-        """Get possible moves for a champion (combines knight and rook movements)."""
+        """Get possible moves for a champion (leaper that jumps 2 squares orthogonally/diagonally or slides 1 square orthogonally)."""
         moves = []
 
-        # Knight moves (L-shaped jumps)
-        knight_offsets = [
-            (2, 1), (2, -1), (-2, 1), (-2, -1),
-            (1, 2), (1, -2), (-1, 2), (-1, -2)
+        # Jump two squares orthogonally
+        orthogonal_jumps = [
+            (2, 0), (-2, 0), (0, 2), (0, -2)
         ]
 
-        for row_offset, col_offset in knight_offsets:
+        for row_offset, col_offset in orthogonal_jumps:
             to_pos = from_pos.offset(row_offset, col_offset)
             if to_pos.is_valid():
                 target_piece = self.get_piece(to_pos)
                 if not target_piece or target_piece.color != piece.color:
                     moves.append(to_pos)
 
-        # Rook moves (horizontal and vertical sliding)
-        rook_directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-        moves.extend(self._get_sliding_moves(from_pos, piece, rook_directions))
+        # Jump two squares diagonally
+        diagonal_jumps = [
+            (2, 2), (2, -2), (-2, 2), (-2, -2)
+        ]
+
+        for row_offset, col_offset in diagonal_jumps:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        # Slide one square orthogonally (non-jumping)
+        orthogonal_slides = [
+            (1, 0), (-1, 0), (0, 1), (0, -1)
+        ]
+
+        for row_offset, col_offset in orthogonal_slides:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        return moves
+
+    def _get_wizard_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for a wizard (leaper that jumps (1,3) or (3,1) or slides 1 square diagonally)."""
+        moves = []
+
+        # Jump (1,3) or (3,1) squares in any direction
+        wizard_jumps = [
+            (1, 3), (1, -3), (-1, 3), (-1, -3),
+            (3, 1), (3, -1), (-3, 1), (-3, -1)
+        ]
+
+        for row_offset, col_offset in wizard_jumps:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        # Slide one square diagonally (non-jumping)
+        diagonal_slides = [
+            (1, 1), (1, -1), (-1, 1), (-1, -1)
+        ]
+
+        for row_offset, col_offset in diagonal_slides:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
 
         return moves
 
@@ -701,6 +755,8 @@ class ChessGame:
                 attacking_moves = self._get_centaur_moves(piece_pos, piece)
             elif piece.piece_type == PieceType.CHAMPION:
                 attacking_moves = self._get_champion_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.WIZARD:
+                attacking_moves = self._get_wizard_moves(piece_pos, piece)
             else:
                 attacking_moves = []
 
