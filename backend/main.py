@@ -218,6 +218,16 @@ class Room:
                 if queenside_pos.is_valid():
                     moves.append(queenside_pos)
 
+        elif piece.piece_type == PieceType.MANN:
+            # Mann moves one square in any direction (like king but non-royal)
+            for row_offset in [-1, 0, 1]:
+                for col_offset in [-1, 0, 1]:
+                    if row_offset == 0 and col_offset == 0:
+                        continue
+                    to_pos = from_pos.offset(row_offset, col_offset)
+                    if to_pos.is_valid():
+                        moves.append(to_pos)
+
         elif piece.piece_type in [PieceType.ROOK, PieceType.BISHOP, PieceType.QUEEN]:
             # Sliding pieces - show all squares in their movement directions
             if piece.piece_type == PieceType.ROOK:
@@ -265,6 +275,49 @@ class Room:
             for row_delta, col_delta in knight_offsets:
                 current_pos = from_pos
                 # Continue sliding in knight-move increments until we hit the board edge
+                while True:
+                    current_pos = current_pos.offset(row_delta, col_delta)
+                    if not current_pos.is_valid():
+                        break
+                    moves.append(current_pos)
+
+        elif piece.piece_type == PieceType.CENTAUR:
+            # Centaur combines knight and king movements
+            # Knight moves
+            knight_offsets = [
+                (2, 1), (2, -1), (-2, 1), (-2, -1),
+                (1, 2), (1, -2), (-1, 2), (-1, -2)
+            ]
+            for row_offset, col_offset in knight_offsets:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+            # King moves (one square in any direction)
+            for row_offset in [-1, 0, 1]:
+                for col_offset in [-1, 0, 1]:
+                    if row_offset == 0 and col_offset == 0:
+                        continue
+                    to_pos = from_pos.offset(row_offset, col_offset)
+                    if to_pos.is_valid():
+                        moves.append(to_pos)
+
+        elif piece.piece_type == PieceType.CHAMPION:
+            # Champion combines knight and rook movements
+            # Knight moves
+            knight_offsets = [
+                (2, 1), (2, -1), (-2, 1), (-2, -1),
+                (1, 2), (1, -2), (-1, 2), (-1, -2)
+            ]
+            for row_offset, col_offset in knight_offsets:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+            # Rook moves (horizontal and vertical)
+            rook_directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+            for row_delta, col_delta in rook_directions:
+                current_pos = from_pos
                 while True:
                     current_pos = current_pos.offset(row_delta, col_delta)
                     if not current_pos.is_valid():

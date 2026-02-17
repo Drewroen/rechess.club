@@ -12,9 +12,13 @@ class PieceType(Enum):
     BISHOP = "bishop"
     QUEEN = "queen"
     KING = "king"
+    MANN = "mann"
     ELEPHANT = "elephant"
     GIRAFFE = "giraffe"
     UNICORN = "unicorn"
+    ZEBRA = "zebra"
+    CENTAUR = "centaur"
+    CHAMPION = "champion"
 
 
 class Color(Enum):
@@ -76,7 +80,8 @@ class Piece:
             (Color.BLACK, PieceType.KNIGHT): "♞",
             (Color.BLACK, PieceType.PAWN): "♟",
         }
-        return symbols[(self.color, self.piece_type)]
+        return symbols.get((self.color, self.piece_type),
+                          f"{self.piece_type.value[0].upper()}")
 
 
 @dataclass
@@ -151,9 +156,13 @@ class ChessGame:
             PieceType.KNIGHT,
             PieceType.KNIGHT,  # weight 2
             PieceType.QUEEN,  # weight 1
+            PieceType.MANN,  # weight 1
             PieceType.ELEPHANT,  # weight 1
             PieceType.GIRAFFE,  # weight 1
             PieceType.UNICORN,  # weight 1
+            PieceType.ZEBRA,  # weight 1
+            PieceType.CENTAUR,  # weight 1
+            PieceType.CHAMPION,  # weight 1
         ]
 
         # Generate 7 random pieces for the back row
@@ -193,12 +202,20 @@ class ChessGame:
             possible_moves = self._get_queen_moves(from_pos, piece)
         elif piece.piece_type == PieceType.KING:
             possible_moves = self._get_king_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.MANN:
+            possible_moves = self._get_mann_moves(from_pos, piece)
         elif piece.piece_type == PieceType.ELEPHANT:
             possible_moves = self._get_elephant_moves(from_pos, piece)
         elif piece.piece_type == PieceType.GIRAFFE:
             possible_moves = self._get_giraffe_moves(from_pos, piece)
         elif piece.piece_type == PieceType.UNICORN:
             possible_moves = self._get_unicorn_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.ZEBRA:
+            possible_moves = self._get_zebra_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.CENTAUR:
+            possible_moves = self._get_centaur_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.CHAMPION:
+            possible_moves = self._get_champion_moves(from_pos, piece)
         else:
             possible_moves = []
 
@@ -335,6 +352,76 @@ class ChessGame:
 
         return moves
 
+    def _get_zebra_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for a zebra ((2,3)-leaper)."""
+        moves = []
+        zebra_offsets = [
+            (2, 3), (2, -3), (-2, 3), (-2, -3),
+            (3, 2), (3, -2), (-3, 2), (-3, -2)
+        ]
+
+        for row_offset, col_offset in zebra_offsets:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        return moves
+
+    def _get_centaur_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for a centaur (combines knight and king movements)."""
+        moves = []
+
+        # Knight moves (L-shaped jumps)
+        knight_offsets = [
+            (2, 1), (2, -1), (-2, 1), (-2, -1),
+            (1, 2), (1, -2), (-1, 2), (-1, -2)
+        ]
+
+        for row_offset, col_offset in knight_offsets:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        # King moves (one square in any direction)
+        for row_offset in [-1, 0, 1]:
+            for col_offset in [-1, 0, 1]:
+                if row_offset == 0 and col_offset == 0:
+                    continue
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    target_piece = self.get_piece(to_pos)
+                    if not target_piece or target_piece.color != piece.color:
+                        moves.append(to_pos)
+
+        return moves
+
+    def _get_champion_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for a champion (combines knight and rook movements)."""
+        moves = []
+
+        # Knight moves (L-shaped jumps)
+        knight_offsets = [
+            (2, 1), (2, -1), (-2, 1), (-2, -1),
+            (1, 2), (1, -2), (-1, 2), (-1, -2)
+        ]
+
+        for row_offset, col_offset in knight_offsets:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        # Rook moves (horizontal and vertical sliding)
+        rook_directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        moves.extend(self._get_sliding_moves(from_pos, piece, rook_directions))
+
+        return moves
+
     def _get_king_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
         """Get possible moves for a king, including castling."""
         moves = []
@@ -381,6 +468,23 @@ class ChessGame:
                     if all(not self._is_position_under_attack(pos, piece.color)
                            for pos in squares_to_check):
                         moves.append(from_pos.offset(0, -2))
+
+        return moves
+
+    def _get_mann_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for a mann (moves like a king, but is not royal)."""
+        moves = []
+
+        # Regular mann moves (one square in any direction)
+        for row_offset in [-1, 0, 1]:
+            for col_offset in [-1, 0, 1]:
+                if row_offset == 0 and col_offset == 0:
+                    continue
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    target_piece = self.get_piece(to_pos)
+                    if not target_piece or target_piece.color != piece.color:
+                        moves.append(to_pos)
 
         return moves
 
@@ -589,6 +693,14 @@ class ChessGame:
                 attacking_moves = self._get_giraffe_moves(piece_pos, piece)
             elif piece.piece_type == PieceType.UNICORN:
                 attacking_moves = self._get_unicorn_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.ZEBRA:
+                attacking_moves = self._get_zebra_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.MANN:
+                attacking_moves = self._get_mann_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.CENTAUR:
+                attacking_moves = self._get_centaur_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.CHAMPION:
+                attacking_moves = self._get_champion_moves(piece_pos, piece)
             else:
                 attacking_moves = []
 
