@@ -400,6 +400,73 @@ class Room:
                 if capture_pos.is_valid():
                     moves.append(capture_pos)
 
+        elif piece.piece_type == PieceType.ZEBRA:
+            # Zebra moves (2,3)-leaper
+            zebra_offsets = [
+                (2, 3), (2, -3), (-2, 3), (-2, -3),
+                (3, 2), (3, -2), (-3, 2), (-3, -2)
+            ]
+            for row_offset, col_offset in zebra_offsets:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+        elif piece.piece_type == PieceType.CHANCELLOR:
+            # Chancellor combines rook and knight movements
+            # Rook moves (sliding orthogonally)
+            rook_directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+            for row_delta, col_delta in rook_directions:
+                current_pos = from_pos
+                # Continue sliding until we hit the board edge
+                while True:
+                    current_pos = current_pos.offset(row_delta, col_delta)
+                    if not current_pos.is_valid():
+                        break
+                    moves.append(current_pos)
+
+            # Knight moves
+            knight_offsets = [
+                (2, 1), (2, -1), (-2, 1), (-2, -1),
+                (1, 2), (1, -2), (-1, 2), (-1, -2)
+            ]
+            for row_offset, col_offset in knight_offsets:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+        elif piece.piece_type == PieceType.ARCHBISHOP:
+            # Archbishop combines bishop and knight movements
+            # Bishop moves (sliding diagonally)
+            bishop_directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+            for row_delta, col_delta in bishop_directions:
+                current_pos = from_pos
+                # Continue sliding until we hit the board edge
+                while True:
+                    current_pos = current_pos.offset(row_delta, col_delta)
+                    if not current_pos.is_valid():
+                        break
+                    moves.append(current_pos)
+
+            # Knight moves
+            knight_offsets = [
+                (2, 1), (2, -1), (-2, 1), (-2, -1),
+                (1, 2), (1, -2), (-1, 2), (-1, -2)
+            ]
+            for row_offset, col_offset in knight_offsets:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+        elif piece.piece_type == PieceType.SHIP:
+            # Ship moves (2,2)-leaper - diagonal jumps of 2 squares
+            ship_offsets = [
+                (2, 2), (2, -2), (-2, 2), (-2, -2)
+            ]
+            for row_offset, col_offset in ship_offsets:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
         return moves
 
     def is_valid_premove(self, from_pos: Position, to_pos: Position, player_color: Color) -> bool:
