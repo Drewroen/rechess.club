@@ -12,6 +12,7 @@ class PieceType(Enum):
     BISHOP = "bishop"
     QUEEN = "queen"
     KING = "king"
+    ELEPHANT = "elephant"
 
 
 class Color(Enum):
@@ -145,6 +146,7 @@ class ChessGame:
             PieceType.KNIGHT,
             PieceType.KNIGHT,  # weight 2
             PieceType.QUEEN,  # weight 1
+            PieceType.ELEPHANT,  # weight 1
         ]
 
         # Generate 7 random pieces for the back row
@@ -184,6 +186,8 @@ class ChessGame:
             possible_moves = self._get_queen_moves(from_pos, piece)
         elif piece.piece_type == PieceType.KING:
             possible_moves = self._get_king_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.ELEPHANT:
+            possible_moves = self._get_elephant_moves(from_pos, piece)
         else:
             possible_moves = []
 
@@ -232,6 +236,28 @@ class ChessGame:
     def _get_bishop_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
         """Get possible moves for a bishop."""
         return self._get_sliding_moves(from_pos, piece, [(1, 1), (1, -1), (-1, 1), (-1, -1)])
+
+    def _get_elephant_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for an elephant (diagonal, max 2 squares)."""
+        moves = []
+        directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+
+        for row_delta, col_delta in directions:
+            for distance in range(1, 3):  # Max 2 squares
+                current_pos = from_pos.offset(row_delta * distance, col_delta * distance)
+                if not current_pos.is_valid():
+                    break
+
+                target_piece = self.get_piece(current_pos)
+                if not target_piece:
+                    moves.append(current_pos)
+                elif target_piece.color != piece.color:
+                    moves.append(current_pos)
+                    break
+                else:
+                    break
+
+        return moves
 
     def _get_queen_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
         """Get possible moves for a queen."""
@@ -503,6 +529,8 @@ class ChessGame:
                 attacking_moves = self._get_queen_moves(piece_pos, piece)
             elif piece.piece_type == PieceType.KING:
                 attacking_moves = self._get_king_attacking_squares(piece_pos, piece)
+            elif piece.piece_type == PieceType.ELEPHANT:
+                attacking_moves = self._get_elephant_moves(piece_pos, piece)
             else:
                 attacking_moves = []
 

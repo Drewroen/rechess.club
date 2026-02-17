@@ -12,14 +12,23 @@ const COLORS = {
   BLACK: 'black'
 };
 
+const FAIRY_PIECES = [
+  'archbishop', 'dragon', 'ship', 'chancellor', 'elephant',
+  'mann', 'zebra', 'giraffe', 'fool', 'unicorn', 'wizard', 'commoner'
+];
+
 /**
  * Get the SVG path for a specific chess piece
  * @param {string} pieceType - The type of piece (e.g., 'king', 'queen', 'pawn')
  * @param {string} color - The color of the piece ('white' or 'black')
- * @param {string} pieceSet - The piece set to use ('standard' or 'fairy')
+ * @param {string} pieceSet - The piece set to use ('standard' or 'fairy'). If not provided, automatically determined based on piece type.
  * @returns {string} The path to the SVG file
  */
-export function getPieceSvgPath(pieceType, color = COLORS.WHITE, pieceSet = PIECE_SETS.STANDARD) {
+export function getPieceSvgPath(pieceType, color = COLORS.WHITE, pieceSet = null) {
+  // Auto-detect piece set if not provided
+  if (pieceSet === null) {
+    pieceSet = FAIRY_PIECES.includes(pieceType) ? PIECE_SETS.FAIRY : PIECE_SETS.STANDARD;
+  }
   return `/chess-pieces/${pieceSet}/${pieceType}_${color}.svg`;
 }
 
@@ -31,12 +40,8 @@ export function getPieceSvgPath(pieceType, color = COLORS.WHITE, pieceSet = PIEC
  */
 export function getAllPiecesForColor(color = COLORS.WHITE, pieceSet = PIECE_SETS.STANDARD) {
   const standardPieces = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn'];
-  const fairyPieces = [
-    'archbishop', 'dragon', 'ship', 'chancellor', 'elephant',
-    'mann', 'zebra', 'giraffe', 'fool', 'unicorn', 'wizard', 'commoner'
-  ];
 
-  const pieces = pieceSet === PIECE_SETS.FAIRY ? fairyPieces : standardPieces;
+  const pieces = pieceSet === PIECE_SETS.FAIRY ? FAIRY_PIECES : standardPieces;
 
   return pieces.reduce((acc, pieceType) => {
     acc[pieceType] = getPieceSvgPath(pieceType, color, pieceSet);
