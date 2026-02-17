@@ -359,6 +359,7 @@ function App() {
     "Welcome to The Jungle",
     "Chess with Guns",
     "What the heck is a Mann?",
+    "Chess for the Sickos",
   ];
 
   const [boardState, setBoardState] = useState(null);

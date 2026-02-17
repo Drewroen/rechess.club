@@ -352,6 +352,54 @@ class Room:
                 if to_pos.is_valid():
                     moves.append(to_pos)
 
+        elif piece.piece_type == PieceType.AMAZON:
+            # Amazon combines queen and knight movements
+            # Queen moves (sliding in all 8 directions)
+            queen_directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+            for row_delta, col_delta in queen_directions:
+                current_pos = from_pos
+                # Continue sliding until we hit the board edge
+                while True:
+                    current_pos = current_pos.offset(row_delta, col_delta)
+                    if not current_pos.is_valid():
+                        break
+                    moves.append(current_pos)
+
+            # Knight moves
+            knight_offsets = [
+                (2, 1), (2, -1), (-2, 1), (-2, -1),
+                (1, 2), (1, -2), (-1, 2), (-1, -2)
+            ]
+            for row_offset, col_offset in knight_offsets:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+        elif piece.piece_type == PieceType.DRAGON:
+            # Dragon combines knight and pawn movements
+            direction = 1 if piece.color == Color.WHITE else -1
+
+            # Knight moves
+            knight_offsets = [
+                (2, 1), (2, -1), (-2, 1), (-2, -1),
+                (1, 2), (1, -2), (-1, 2), (-1, -2)
+            ]
+            for row_offset, col_offset in knight_offsets:
+                to_pos = from_pos.offset(row_offset, col_offset)
+                if to_pos.is_valid():
+                    moves.append(to_pos)
+
+            # Forward move (1 square)
+            forward_pos = from_pos.offset(direction, 0)
+            if forward_pos.is_valid():
+                moves.append(forward_pos)
+
+            # Diagonal captures
+            for col_offset in [-1, 1]:
+                capture_pos = from_pos.offset(direction, col_offset)
+                if capture_pos.is_valid():
+                    moves.append(capture_pos)
+
         return moves
 
     def is_valid_premove(self, from_pos: Position, to_pos: Position, player_color: Color) -> bool:

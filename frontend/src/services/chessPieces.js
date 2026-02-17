@@ -15,7 +15,7 @@ const COLORS = {
 const FAIRY_PIECES = [
   'archbishop', 'dragon', 'ship', 'chancellor', 'elephant',
   'mann', 'zebra', 'giraffe', 'fool', 'unicorn', 'wizard', 'commoner',
-  'centaur', 'champion'
+  'centaur', 'champion', 'amazon'
 ];
 
 /**

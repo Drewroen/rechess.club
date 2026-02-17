@@ -20,6 +20,11 @@ class PieceType(Enum):
     CENTAUR = "centaur"
     CHAMPION = "champion"
     WIZARD = "wizard"
+    CHANCELLOR = "chancellor"
+    ARCHBISHOP = "archbishop"
+    AMAZON = "amazon"
+    DRAGON = "dragon"
+    SHIP = "ship"
 
 
 class Color(Enum):
@@ -165,6 +170,11 @@ class ChessGame:
             PieceType.CENTAUR,  # weight 1
             PieceType.CHAMPION,  # weight 1
             PieceType.WIZARD,  # weight 1
+            PieceType.CHANCELLOR,  # weight 1
+            PieceType.ARCHBISHOP,  # weight 1
+            PieceType.AMAZON,  # weight 1
+            PieceType.DRAGON,  # weight 1
+            PieceType.SHIP,  # weight 1
         ]
 
         # Generate 7 random pieces for the back row
@@ -220,6 +230,16 @@ class ChessGame:
             possible_moves = self._get_champion_moves(from_pos, piece)
         elif piece.piece_type == PieceType.WIZARD:
             possible_moves = self._get_wizard_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.CHANCELLOR:
+            possible_moves = self._get_chancellor_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.ARCHBISHOP:
+            possible_moves = self._get_archbishop_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.AMAZON:
+            possible_moves = self._get_amazon_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.DRAGON:
+            possible_moves = self._get_dragon_moves(from_pos, piece)
+        elif piece.piece_type == PieceType.SHIP:
+            possible_moves = self._get_ship_moves(from_pos, piece)
         else:
             possible_moves = []
 
@@ -468,6 +488,125 @@ class ChessGame:
         ]
 
         for row_offset, col_offset in diagonal_slides:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        return moves
+
+    def _get_dragon_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for a dragon (combines knight and pawn movements)."""
+        moves = []
+        direction = 1 if piece.color == Color.WHITE else -1
+
+        # Knight moves (L-shaped jumps)
+        knight_offsets = [
+            (2, 1), (2, -1), (-2, 1), (-2, -1),
+            (1, 2), (1, -2), (-1, 2), (-1, -2)
+        ]
+
+        for row_offset, col_offset in knight_offsets:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        # Forward move (1 square)
+        forward_pos = from_pos.offset(direction, 0)
+        if forward_pos.is_valid() and not self.get_piece(forward_pos):
+            moves.append(forward_pos)
+
+        # Diagonal captures
+        for col_offset in [-1, 1]:
+            capture_pos = from_pos.offset(direction, col_offset)
+            if capture_pos.is_valid():
+                target_piece = self.get_piece(capture_pos)
+                if target_piece and target_piece.color != piece.color:
+                    moves.append(capture_pos)
+
+        return moves
+
+    def _get_archbishop_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for an archbishop (combines knight and bishop movements)."""
+        moves = []
+
+        # Knight moves (L-shaped jumps)
+        knight_offsets = [
+            (2, 1), (2, -1), (-2, 1), (-2, -1),
+            (1, 2), (1, -2), (-1, 2), (-1, -2)
+        ]
+
+        for row_offset, col_offset in knight_offsets:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        # Bishop moves (diagonal sliding)
+        diagonal_directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+        bishop_moves = self._get_sliding_moves(from_pos, piece, diagonal_directions)
+        moves.extend(bishop_moves)
+
+        return moves
+
+    def _get_chancellor_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for a chancellor (combines rook and knight movements)."""
+        moves = []
+
+        # Rook moves (sliding orthogonally)
+        rook_directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        moves.extend(self._get_sliding_moves(from_pos, piece, rook_directions))
+
+        # Knight moves (L-shaped jumps)
+        knight_offsets = [
+            (2, 1), (2, -1), (-2, 1), (-2, -1),
+            (1, 2), (1, -2), (-1, 2), (-1, -2)
+        ]
+
+        for row_offset, col_offset in knight_offsets:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        return moves
+
+    def _get_amazon_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for an amazon (combines queen and knight movements)."""
+        moves = []
+
+        # Queen moves (sliding in all 8 directions)
+        queen_directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+        moves.extend(self._get_sliding_moves(from_pos, piece, queen_directions))
+
+        # Knight moves (L-shaped jumps)
+        knight_offsets = [
+            (2, 1), (2, -1), (-2, 1), (-2, -1),
+            (1, 2), (1, -2), (-1, 2), (-1, -2)
+        ]
+
+        for row_offset, col_offset in knight_offsets:
+            to_pos = from_pos.offset(row_offset, col_offset)
+            if to_pos.is_valid():
+                target_piece = self.get_piece(to_pos)
+                if not target_piece or target_piece.color != piece.color:
+                    moves.append(to_pos)
+
+        return moves
+
+    def _get_ship_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
+        """Get possible moves for a ship ((2,2)-leaper - diagonal jumps of 2 squares)."""
+        moves = []
+        ship_offsets = [
+            (2, 2), (2, -2), (-2, 2), (-2, -2)
+        ]
+
+        for row_offset, col_offset in ship_offsets:
             to_pos = from_pos.offset(row_offset, col_offset)
             if to_pos.is_valid():
                 target_piece = self.get_piece(to_pos)
@@ -757,6 +896,16 @@ class ChessGame:
                 attacking_moves = self._get_champion_moves(piece_pos, piece)
             elif piece.piece_type == PieceType.WIZARD:
                 attacking_moves = self._get_wizard_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.CHANCELLOR:
+                attacking_moves = self._get_chancellor_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.ARCHBISHOP:
+                attacking_moves = self._get_archbishop_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.AMAZON:
+                attacking_moves = self._get_amazon_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.DRAGON:
+                attacking_moves = self._get_dragon_moves(piece_pos, piece)
+            elif piece.piece_type == PieceType.SHIP:
+                attacking_moves = self._get_ship_moves(piece_pos, piece)
             else:
                 attacking_moves = []
 
