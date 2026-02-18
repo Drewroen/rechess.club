@@ -123,6 +123,8 @@ class ChessGame:
             Color.WHITE: [],
             Color.BLACK: [],
         }
+        self.halfmove_clock: int = 0  # Counts half-moves since last capture or pawn move
+        self.position_history: Dict[str, int] = {}  # Track position occurrences for threefold repetition
         self._initialize_board()
 
     def _initialize_board(self) -> None:
@@ -219,6 +221,41 @@ class ChessGame:
         back_row_layout.insert(king_position, PieceType.KING)
 
         return back_row_layout
+
+    def _get_position_key(self) -> str:
+        """
+        Generate a unique key for the current board position.
+
+        Two positions are considered the same if they have:
+        - Same pieces in same positions
+        - Same player to move
+        - Same castling rights
+        - Same en passant target
+        """
+        # Build a list of position components
+        position_parts = []
+
+        # Add all pieces in a sorted order (by position)
+        for row in range(8):
+            for col in range(8):
+                pos = Position(row, col)
+                piece = self.get_piece(pos)
+                if piece:
+                    # Include piece type, color, and whether it has moved (for castling rights)
+                    position_parts.append(
+                        f"{row},{col}:{piece.color.value}:{piece.piece_type.value}:{piece.has_moved}"
+                    )
+
+        # Add current turn
+        position_parts.append(f"turn:{self.current_turn.value}")
+
+        # Add en passant target if it exists
+        if self.en_passant_target:
+            position_parts.append(
+                f"ep:{self.en_passant_target.row},{self.en_passant_target.col}"
+            )
+
+        return "|".join(position_parts)
 
     def get_piece(self, pos: Position) -> Optional[Piece]:
         """Get the piece at a given position."""
@@ -962,9 +999,21 @@ class ChessGame:
         if captured_piece:
             self.captured_pieces[captured_piece.color].append(captured_piece)
 
+        # Update halfmove clock for 50-move rule
+        if piece.piece_type == PieceType.PAWN or captured_piece:
+            self.halfmove_clock = 0
+        else:
+            self.halfmove_clock += 1
+
         # Record move and switch turns
         self.move_history.append(move)
         self.current_turn = self.current_turn.opposite()
+
+        # Track position for threefold repetition
+        position_key = self._get_position_key()
+        self.position_history[position_key] = (
+            self.position_history.get(position_key, 0) + 1
+        )
 
         return True
 
@@ -1096,9 +1145,23 @@ class ChessGame:
 
         return True
 
+    def is_fifty_move_draw(self) -> bool:
+        """Check if the game is a draw by the 50-move rule."""
+        return self.halfmove_clock >= 100
+
+    def is_threefold_repetition(self) -> bool:
+        """Check if the game is a draw by threefold repetition."""
+        position_key = self._get_position_key()
+        return self.position_history.get(position_key, 0) >= 3
+
     def is_game_over(self) -> bool:
         """Check if the game is over."""
-        return self.is_checkmate() or self.is_stalemate()
+        return (
+            self.is_checkmate()
+            or self.is_stalemate()
+            or self.is_fifty_move_draw()
+            or self.is_threefold_repetition()
+        )
 
     def get_game_result(self) -> Optional[str]:
         """Get the result of the game."""
@@ -1107,6 +1170,10 @@ class ChessGame:
             return f"{winner.value} wins by checkmate"
         elif self.is_stalemate():
             return "Draw by stalemate"
+        elif self.is_fifty_move_draw():
+            return "Draw by fifty-move rule"
+        elif self.is_threefold_repetition():
+            return "Draw by threefold repetition"
         return None
 
     def display_board(self) -> str:
