@@ -10,6 +10,57 @@ function formatTime(seconds) {
   return `${mins}:${secs.toString().padStart(2, "0")}.${tenths}`;
 }
 
+// Helper function to calculate net captured pieces
+// Returns only pieces that give a material advantage (cancels out matching captures)
+// allCapturedPieces.white = white pieces captured by black
+// allCapturedPieces.black = black pieces captured by white
+// displayFor = which side's advantage to show ("white" or "black")
+function calculateNetCapturedPieces(allCapturedPieces, displayFor) {
+  if (!allCapturedPieces) return [];
+
+  const whitePiecesCaptured = allCapturedPieces.white || [];
+  const blackPiecesCaptured = allCapturedPieces.black || [];
+
+  // Count pieces by type
+  const countByType = (pieces) => {
+    const counts = {};
+    pieces.forEach((piece) => {
+      const type = piece.piece_type;
+      counts[type] = (counts[type] || 0) + 1;
+    });
+    return counts;
+  };
+
+  const whiteCounts = countByType(whitePiecesCaptured);
+  const blackCounts = countByType(blackPiecesCaptured);
+
+  const netPieces = [];
+
+  if (displayFor === "black") {
+    // Show net advantage for black (white pieces captured by black)
+    Object.keys(whiteCounts).forEach((type) => {
+      const netCount = whiteCounts[type] - (blackCounts[type] || 0);
+      if (netCount > 0) {
+        for (let i = 0; i < netCount; i++) {
+          netPieces.push({ color: "white", piece_type: type });
+        }
+      }
+    });
+  } else {
+    // Show net advantage for white (black pieces captured by white)
+    Object.keys(blackCounts).forEach((type) => {
+      const netCount = blackCounts[type] - (whiteCounts[type] || 0);
+      if (netCount > 0) {
+        for (let i = 0; i < netCount; i++) {
+          netPieces.push({ color: "black", piece_type: type });
+        }
+      }
+    });
+  }
+
+  return netPieces;
+}
+
 // Helper function to render captured pieces
 function renderCapturedPieces(capturedPieces) {
   if (!capturedPieces || capturedPieces.length === 0) return null;
@@ -381,6 +432,7 @@ function App() {
     // Pick a random tagline on component mount
     return taglinePhrases[Math.floor(Math.random() * taglinePhrases.length)];
   });
+  const [playerCount, setPlayerCount] = useState(0);
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const boardRef = useRef(null);
@@ -939,6 +991,29 @@ function App() {
   }, [draggedPiece]);
 
   useEffect(() => {
+    // Fetch player count periodically
+    const fetchPlayerCount = async () => {
+      try {
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || "localhost:8000";
+        const protocol = backendUrl.includes("localhost") ? "http" : "https";
+        const response = await fetch(`${protocol}://${backendUrl}/player_count`);
+        const data = await response.json();
+        setPlayerCount(data.player_count);
+      } catch (error) {
+        console.error("Error fetching player count:", error);
+      }
+    };
+
+    // Fetch immediately
+    fetchPlayerCount();
+
+    // Then fetch every 5 seconds
+    const interval = setInterval(fetchPlayerCount, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     // Cleanup on unmount
     return () => {
       if (reconnectTimeoutRef.current) {
@@ -1084,6 +1159,19 @@ function App() {
               }}
             />
           </div>
+          {playerCount >= 10 && (
+            <div
+              style={{
+                fontSize: "0.875rem",
+                color: "#888888",
+                marginTop: "0.5rem",
+                textAlign: "center",
+              }}
+            >
+              {playerCount} {playerCount === 1 ? "person" : "people"} currently
+              playing!
+            </div>
+          )}
         </div>
       )}
 
@@ -1168,7 +1256,10 @@ function App() {
               </span>
               {boardState.captured_pieces &&
                 renderCapturedPieces(
-                  boardState.captured_pieces[boardState.player_color],
+                  calculateNetCapturedPieces(
+                    boardState.captured_pieces,
+                    boardState.player_color === "white" ? "black" : "white",
+                  ),
                 )}
             </div>
             <span
@@ -1230,9 +1321,10 @@ function App() {
               </span>
               {boardState.captured_pieces &&
                 renderCapturedPieces(
-                  boardState.captured_pieces[
-                    boardState.player_color === "white" ? "black" : "white"
-                  ],
+                  calculateNetCapturedPieces(
+                    boardState.captured_pieces,
+                    boardState.player_color,
+                  ),
                 )}
             </div>
             <span

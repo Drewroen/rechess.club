@@ -96,31 +96,26 @@ class TestChessGameInitialization:
             assert piece.piece_type == PieceType.PAWN
             assert piece.color == Color.BLACK
 
-    @pytest.mark.parametrize("row,col,piece_type,color", [
-        (0, 0, PieceType.ROOK, Color.WHITE),
-        (0, 1, PieceType.KNIGHT, Color.WHITE),
-        (0, 2, PieceType.BISHOP, Color.WHITE),
-        (0, 3, PieceType.QUEEN, Color.WHITE),
-        (0, 4, PieceType.KING, Color.WHITE),
-        (0, 5, PieceType.BISHOP, Color.WHITE),
-        (0, 6, PieceType.KNIGHT, Color.WHITE),
-        (0, 7, PieceType.ROOK, Color.WHITE),
-        (7, 0, PieceType.ROOK, Color.BLACK),
-        (7, 1, PieceType.KNIGHT, Color.BLACK),
-        (7, 2, PieceType.BISHOP, Color.BLACK),
-        (7, 3, PieceType.QUEEN, Color.BLACK),
-        (7, 4, PieceType.KING, Color.BLACK),
-        (7, 5, PieceType.BISHOP, Color.BLACK),
-        (7, 6, PieceType.KNIGHT, Color.BLACK),
-        (7, 7, PieceType.ROOK, Color.BLACK),
-    ])
-    def test_initial_back_rank_pieces(self, row, col, piece_type, color):
-        """Test that back rank pieces are set up correctly."""
+    def test_initial_back_rank_has_pieces(self):
+        """Test that back rank pieces are set up correctly with random layout."""
         game = ChessGame()
-        piece = game.get_piece(Position(row, col))
-        assert piece is not None
-        assert piece.piece_type == piece_type
-        assert piece.color == color
+
+        # Check that all back rank squares have pieces
+        for col in range(8):
+            white_piece = game.get_piece(Position(0, col))
+            black_piece = game.get_piece(Position(7, col))
+            assert white_piece is not None
+            assert black_piece is not None
+            assert white_piece.color == Color.WHITE
+            assert black_piece.color == Color.BLACK
+
+        # Verify exactly one king per color
+        white_kings = sum(1 for col in range(8)
+                         if game.get_piece(Position(0, col)).piece_type == PieceType.KING)
+        black_kings = sum(1 for col in range(8)
+                         if game.get_piece(Position(7, col)).piece_type == PieceType.KING)
+        assert white_kings == 1
+        assert black_kings == 1
 
     def test_initial_turn(self):
         """Test that white starts first."""
@@ -315,9 +310,13 @@ class TestKingMoves:
     def test_kingside_castling_white(self):
         """Test white kingside castling."""
         game = ChessGame()
-        # Clear squares between king and rook
-        game.board.pop(Position.from_algebraic("f1"))
-        game.board.pop(Position.from_algebraic("g1"))
+        game.board.clear()
+
+        # Set up kingside castling position
+        game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("h1")] = Piece(PieceType.ROOK, Color.WHITE)
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+        game.current_turn = Color.WHITE
 
         moves = game.get_possible_moves(Position.from_algebraic("e1"))
         assert Position.from_algebraic("g1") in moves
@@ -325,10 +324,13 @@ class TestKingMoves:
     def test_queenside_castling_white(self):
         """Test white queenside castling."""
         game = ChessGame()
-        # Clear squares between king and rook
-        game.board.pop(Position.from_algebraic("d1"))
-        game.board.pop(Position.from_algebraic("c1"))
-        game.board.pop(Position.from_algebraic("b1"))
+        game.board.clear()
+
+        # Set up queenside castling position
+        game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("a1")] = Piece(PieceType.ROOK, Color.WHITE)
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+        game.current_turn = Color.WHITE
 
         moves = game.get_possible_moves(Position.from_algebraic("e1"))
         assert Position.from_algebraic("c1") in moves
@@ -336,16 +338,29 @@ class TestKingMoves:
     def test_castling_blocked_by_piece(self):
         """Test castling is blocked by piece between king and rook."""
         game = ChessGame()
-        # f1 is occupied (knight is still there)
+        game.board.clear()
+
+        # Set up position with blocker
+        game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("h1")] = Piece(PieceType.ROOK, Color.WHITE)
+        game.board[Position.from_algebraic("f1")] = Piece(PieceType.KNIGHT, Color.WHITE)  # Blocker
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+        game.current_turn = Color.WHITE
+
         moves = game.get_possible_moves(Position.from_algebraic("e1"))
         assert Position.from_algebraic("g1") not in moves
 
     def test_cannot_castle_after_king_moves(self):
         """Test castling is not allowed after king has moved."""
         game = ChessGame()
-        # Clear squares
-        game.board.pop(Position.from_algebraic("f1"))
-        game.board.pop(Position.from_algebraic("g1"))
+        game.board.clear()
+
+        # Set up castling position
+        game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("h1")] = Piece(PieceType.ROOK, Color.WHITE)
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+        game.board[Position.from_algebraic("e7")] = Piece(PieceType.PAWN, Color.BLACK)
+        game.current_turn = Color.WHITE
 
         # Move king and move it back
         game.make_move(Position.from_algebraic("e1"), Position.from_algebraic("f1"))
@@ -511,9 +526,13 @@ class TestCastling:
     def test_castling_moves_rook(self):
         """Test that castling moves the rook correctly."""
         game = ChessGame()
-        # Clear squares for kingside castling
-        game.board.pop(Position.from_algebraic("f1"))
-        game.board.pop(Position.from_algebraic("g1"))
+        game.board.clear()
+
+        # Set up kingside castling position
+        game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("h1")] = Piece(PieceType.ROOK, Color.WHITE)
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+        game.current_turn = Color.WHITE
 
         game.make_move(Position.from_algebraic("e1"), Position.from_algebraic("g1"))
 
@@ -529,10 +548,13 @@ class TestCastling:
     def test_queenside_castling_moves_rook(self):
         """Test that queenside castling moves the rook correctly."""
         game = ChessGame()
-        # Clear squares for queenside castling
-        game.board.pop(Position.from_algebraic("d1"))
-        game.board.pop(Position.from_algebraic("c1"))
-        game.board.pop(Position.from_algebraic("b1"))
+        game.board.clear()
+
+        # Set up queenside castling position
+        game.board[Position.from_algebraic("e1")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("a1")] = Piece(PieceType.ROOK, Color.WHITE)
+        game.board[Position.from_algebraic("e8")] = Piece(PieceType.KING, Color.BLACK)
+        game.current_turn = Color.WHITE
 
         game.make_move(Position.from_algebraic("e1"), Position.from_algebraic("c1"))
 
@@ -644,11 +666,13 @@ class TestBoardDisplay:
         assert "1 " in board_str
         assert "8 " in board_str
 
-        # Check that it contains piece symbols
-        assert "♖" in board_str  # White rook
+        # Check that it contains king symbols (always present in random layout)
         assert "♔" in board_str  # White king
-        assert "♜" in board_str  # Black rook
         assert "♚" in board_str  # Black king
+
+        # Check for pawns
+        assert "♙" in board_str  # White pawn
+        assert "♟" in board_str  # Black pawn
 
         # Check for empty squares (dots)
         assert "." in board_str
@@ -904,3 +928,291 @@ class TestPromotedPieceMoves:
         moves = game.get_possible_moves(Position.from_algebraic("a8"))
         # This is the bug - no moves because piece_type doesn't match any checks
         assert len(moves) == 0, "Bug: promoted piece has no moves because piece_type is a string"
+
+
+class TestMannMoves:
+    """Test suite for Mann (non-royal king) movement."""
+
+    @pytest.mark.parametrize("mann_pos,expected_moves", [
+        ("e4", ["d3", "d4", "d5", "e3", "e5", "f3", "f4", "f5"]),
+        ("a1", ["a2", "b1", "b2"]),
+        ("h8", ["g7", "g8", "h7"]),
+    ])
+    def test_mann_basic_moves(self, mann_pos, expected_moves):
+        """Test Mann moves one square in any direction (like king but non-royal)."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic(mann_pos)] = Piece(PieceType.MANN, Color.WHITE)
+        game.board[Position.from_algebraic("a8")] = Piece(PieceType.KING, Color.WHITE)
+        game.board[Position.from_algebraic("h1")] = Piece(PieceType.KING, Color.BLACK)
+
+        moves = game.get_possible_moves(Position.from_algebraic(mann_pos))
+        move_notations = sorted([pos.to_algebraic() for pos in moves])
+        assert move_notations == sorted(expected_moves)
+
+
+class TestElephantMoves:
+    """Test suite for Elephant movement."""
+
+    def test_elephant_diagonal_max_2_squares(self):
+        """Test Elephant moves diagonally up to 2 squares."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.ELEPHANT, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+        move_notations = sorted([pos.to_algebraic() for pos in moves])
+
+        expected = sorted([
+            "c3", "c5", "e3", "e5",  # 1 square diagonally
+            "b2", "b6", "f2", "f6"   # 2 squares diagonally
+        ])
+        assert move_notations == expected
+
+    def test_elephant_blocked_by_piece(self):
+        """Test Elephant stops at friendly pieces."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.ELEPHANT, Color.WHITE)
+        game.board[Position.from_algebraic("e5")] = Piece(PieceType.PAWN, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+        # Should not be able to move to e5 or f6
+        assert Position.from_algebraic("e5") not in moves
+        assert Position.from_algebraic("f6") not in moves
+
+
+class TestGiraffeMoves:
+    """Test suite for Giraffe movement."""
+
+    def test_giraffe_moves_4_1_pattern(self):
+        """Test Giraffe moves (4,1) or (1,4) leaper."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("e4")] = Piece(PieceType.GIRAFFE, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("e4"))
+        move_notations = sorted([pos.to_algebraic() for pos in moves])
+
+        # (4,1) and (1,4) in all directions
+        expected = sorted(["d8", "f8", "a3", "a5"])  # Only valid moves from e4
+        assert move_notations == expected
+
+
+class TestUnicornMoves:
+    """Test suite for Unicorn (nightrider) movement."""
+
+    def test_unicorn_sliding_knight_moves(self):
+        """Test Unicorn slides in knight-move directions."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("a1")] = Piece(PieceType.UNICORN, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("a1"))
+
+        # Should have multiple squares in (2,1) direction
+        assert Position.from_algebraic("b3") in moves  # 1 knight move
+        assert Position.from_algebraic("c5") in moves  # 2 knight moves
+        assert Position.from_algebraic("d7") in moves  # 3 knight moves
+
+
+class TestZebraMoves:
+    """Test suite for Zebra movement."""
+
+    def test_zebra_2_3_leaper(self):
+        """Test Zebra moves (2,3) leaper."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.ZEBRA, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+        move_notations = sorted([pos.to_algebraic() for pos in moves])
+
+        expected = sorted([
+            "b1", "b7", "f1", "f7",  # (±2, ±3)
+            "a2", "a6", "g2", "g6"   # (±3, ±2)
+        ])
+        assert move_notations == expected
+
+
+class TestCentaurMoves:
+    """Test suite for Centaur movement."""
+
+    def test_centaur_knight_plus_king(self):
+        """Test Centaur combines knight and king movements."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.CENTAUR, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+
+        # Knight moves
+        assert Position.from_algebraic("c2") in moves
+        assert Position.from_algebraic("e6") in moves
+
+        # King moves (adjacent squares)
+        assert Position.from_algebraic("d3") in moves
+        assert Position.from_algebraic("e4") in moves
+        assert Position.from_algebraic("d5") in moves
+
+
+class TestChampionMoves:
+    """Test suite for Champion movement."""
+
+    def test_champion_jumps_and_slides(self):
+        """Test Champion jumps 2 squares or slides 1 square orthogonally."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.CHAMPION, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+
+        # Jump 2 squares orthogonally
+        assert Position.from_algebraic("d6") in moves
+        assert Position.from_algebraic("f4") in moves
+
+        # Jump 2 squares diagonally
+        assert Position.from_algebraic("b2") in moves
+        assert Position.from_algebraic("f6") in moves
+
+        # Slide 1 square orthogonally
+        assert Position.from_algebraic("d3") in moves
+        assert Position.from_algebraic("e4") in moves
+
+
+class TestWizardMoves:
+    """Test suite for Wizard movement."""
+
+    def test_wizard_jumps_and_diagonal_slides(self):
+        """Test Wizard jumps (1,3) or (3,1) or slides 1 square diagonally."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.WIZARD, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+
+        # Jump (1,3) or (3,1)
+        assert Position.from_algebraic("c7") in moves  # (3,1)
+        assert Position.from_algebraic("g5") in moves  # (1,3)
+
+        # Slide 1 square diagonally
+        assert Position.from_algebraic("c3") in moves
+        assert Position.from_algebraic("e5") in moves
+
+
+class TestChancellorMoves:
+    """Test suite for Chancellor movement."""
+
+    def test_chancellor_rook_plus_knight(self):
+        """Test Chancellor combines rook and knight movements."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.CHANCELLOR, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+
+        # Rook moves (orthogonal sliding)
+        assert Position.from_algebraic("d1") in moves
+        assert Position.from_algebraic("d8") in moves
+        assert Position.from_algebraic("a4") in moves
+        assert Position.from_algebraic("h4") in moves
+
+        # Knight moves
+        assert Position.from_algebraic("c2") in moves
+        assert Position.from_algebraic("f5") in moves
+
+
+class TestArchbishopMoves:
+    """Test suite for Archbishop movement."""
+
+    def test_archbishop_bishop_plus_knight(self):
+        """Test Archbishop combines bishop and knight movements."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.ARCHBISHOP, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+
+        # Bishop moves (diagonal sliding)
+        assert Position.from_algebraic("a1") in moves
+        assert Position.from_algebraic("g7") in moves
+
+        # Knight moves
+        assert Position.from_algebraic("c2") in moves
+        assert Position.from_algebraic("f5") in moves
+
+
+class TestAmazonMoves:
+    """Test suite for Amazon movement."""
+
+    def test_amazon_queen_plus_knight(self):
+        """Test Amazon combines queen and knight movements."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.AMAZON, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+
+        # Queen moves (all sliding directions)
+        assert Position.from_algebraic("d1") in moves  # Rook
+        assert Position.from_algebraic("a4") in moves  # Rook
+        assert Position.from_algebraic("a1") in moves  # Bishop
+        assert Position.from_algebraic("g7") in moves  # Bishop
+
+        # Knight moves
+        assert Position.from_algebraic("c2") in moves
+        assert Position.from_algebraic("f5") in moves
+
+        # Amazon has the most moves of any piece
+        assert len(moves) > 27  # More than a queen
+
+
+class TestDragonMoves:
+    """Test suite for Dragon movement."""
+
+    def test_dragon_knight_plus_pawn(self):
+        """Test Dragon combines knight and pawn movements."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.DRAGON, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+
+        # Knight moves
+        assert Position.from_algebraic("c2") in moves
+        assert Position.from_algebraic("f5") in moves
+
+        # Forward pawn move
+        assert Position.from_algebraic("d5") in moves
+
+    def test_dragon_pawn_captures(self):
+        """Test Dragon can capture diagonally like a pawn."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.DRAGON, Color.WHITE)
+        game.board[Position.from_algebraic("c5")] = Piece(PieceType.PAWN, Color.BLACK)
+        game.board[Position.from_algebraic("e5")] = Piece(PieceType.PAWN, Color.BLACK)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+
+        # Should be able to capture diagonally
+        assert Position.from_algebraic("c5") in moves
+        assert Position.from_algebraic("e5") in moves
+
+
+class TestShipMoves:
+    """Test suite for Ship movement."""
+
+    def test_ship_diagonal_2_2_leaper(self):
+        """Test Ship moves (2,2) diagonal leaper."""
+        game = ChessGame()
+        game.board.clear()
+        game.board[Position.from_algebraic("d4")] = Piece(PieceType.SHIP, Color.WHITE)
+
+        moves = game.get_possible_moves(Position.from_algebraic("d4"))
+        move_notations = sorted([pos.to_algebraic() for pos in moves])
+
+        expected = sorted([
+            "b2", "b6", "f2", "f6"  # (±2, ±2)
+        ])
+        assert move_notations == expected

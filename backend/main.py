@@ -1,4 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict, Optional
 import uuid
 import json
@@ -11,6 +12,20 @@ STARTING_TIME_SECONDS = 180.0  # Initial time for each player in seconds
 INCREMENT_SECONDS = 3.0  # Time added after each move in seconds
 
 app = FastAPI()
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:5174",  # Alternative Vite port
+        "https://rechess.club",   # Production domain
+        "https://www.rechess.club",  # Production www subdomain
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class Room:
     def __init__(self, player1: WebSocket, player2: WebSocket) -> None:
@@ -645,15 +660,23 @@ class ConnectionManager:
                         pass
 
                 # Clean up
-                del self.websocket_to_room[room.player1]
-                del self.websocket_to_room[room.player2]
-                del self.rooms[room_id]
+                self.websocket_to_room.pop(room.player1, None)
+                self.websocket_to_room.pop(room.player2, None)
+                self.rooms.pop(room_id, None)
 
 manager = ConnectionManager()
 
 @app.get("/")
 async def root() -> dict[str, str]:
     return {"message": "Hello World"}
+
+@app.get("/player_count")
+async def get_player_count() -> dict[str, int]:
+    """Get the total number of active players (in queue + in games)."""
+    players_in_queue = len(manager.queue)
+    players_in_games = len(manager.websocket_to_room)
+    total_players = players_in_queue + players_in_games
+    return {"player_count": total_players}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
