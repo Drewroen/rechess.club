@@ -649,15 +649,16 @@ class ConnectionManager:
                     winner_color = room.get_player_color(other_player)
 
                     # Notify other player of win by resignation (don't close their connection)
-                    try:
-                        await other_player.send_text(json.dumps({
-                            "type": "game_over",
-                            "result": f"{winner_color.value} wins by resignation",
-                            "is_checkmate": False,
-                            "is_stalemate": False
-                        }))
-                    except:
-                        pass
+                    if winner_color:
+                        try:
+                            await other_player.send_text(json.dumps({
+                                "type": "game_over",
+                                "result": f"{winner_color.value} wins by resignation",
+                                "is_checkmate": False,
+                                "is_stalemate": False
+                            }))
+                        except:
+                            pass
 
                 # Clean up
                 self.websocket_to_room.pop(room.player1, None)

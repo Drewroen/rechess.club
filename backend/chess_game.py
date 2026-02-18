@@ -123,8 +123,12 @@ class ChessGame:
             Color.WHITE: [],
             Color.BLACK: [],
         }
-        self.halfmove_clock: int = 0  # Counts half-moves since last capture or pawn move
-        self.position_history: Dict[str, int] = {}  # Track position occurrences for threefold repetition
+        self.halfmove_clock: int = (
+            0  # Counts half-moves since last capture or pawn move
+        )
+        self.position_history: Dict[
+            str, int
+        ] = {}  # Track position occurrences for threefold repetition
         self._initialize_board()
 
     def _initialize_board(self) -> None:
@@ -149,48 +153,28 @@ class ChessGame:
         The back row is generated with weighted random selection where each piece
         has both a weight (probability of being selected) and a maximum count.
 
-        Piece weights and max counts:
-        - Rook: weight 10, max 2
-        - Bishop: weight 5, max 2
-        - Knight: weight 5, max 2
-        - Queen: weight 3, max 1
-        - Mann: weight 2, max 2
-        - Elephant: weight 2, max 2
-        - Giraffe: weight 1, max 1
-        - Unicorn: weight 2, max 1
-        - Zebra: weight 1, max 2
-        - Centaur: weight 3, max 2
-        - Champion: weight 2, max 1
-        - Wizard: weight 2, max 1
-        - Chancellor: weight 2, max 1
-        - Archbishop: weight 2, max 1
-        - Amazon: weight 1, max 1
-        - Dragon: weight 2, max 2
-        - Ship: weight 1, max 2
-        - King: must always be on the board (exactly once)
-
         Returns:
             A list of 8 PieceTypes representing the back row layout
         """
         # Define piece weights and maximum counts (excluding King which is guaranteed)
         piece_config = {
-            PieceType.ROOK: {"weight": 12, "max_count": 2},
-            PieceType.BISHOP: {"weight": 12, "max_count": 2},
-            PieceType.KNIGHT: {"weight": 12, "max_count": 2},
-            PieceType.QUEEN: {"weight": 6, "max_count": 1},
-            PieceType.MANN: {"weight": 1, "max_count": 1},
-            PieceType.ELEPHANT: {"weight": 1, "max_count": 1},
-            PieceType.GIRAFFE: {"weight": 1, "max_count": 1},
-            PieceType.UNICORN: {"weight": 1, "max_count": 1},
-            PieceType.ZEBRA: {"weight": 1, "max_count": 1},
-            PieceType.CENTAUR: {"weight": 1, "max_count": 1},
-            PieceType.CHAMPION: {"weight": 1, "max_count": 1},
-            PieceType.WIZARD: {"weight": 1, "max_count": 1},
-            PieceType.CHANCELLOR: {"weight": 1, "max_count": 1},
-            PieceType.ARCHBISHOP: {"weight": 1, "max_count": 1},
-            PieceType.AMAZON: {"weight": 1, "max_count": 1},
-            PieceType.DRAGON: {"weight": 1, "max_count": 1},
-            PieceType.SHIP: {"weight": 1, "max_count": 1},
+            PieceType.ROOK: {"weight": 120, "max_count": 2},
+            PieceType.BISHOP: {"weight": 120, "max_count": 2},
+            PieceType.KNIGHT: {"weight": 120, "max_count": 2},
+            PieceType.QUEEN: {"weight": 60, "max_count": 1},
+            PieceType.MANN: {"weight": 15, "max_count": 1},
+            PieceType.ELEPHANT: {"weight": 15, "max_count": 1},
+            PieceType.GIRAFFE: {"weight": 15, "max_count": 1},
+            PieceType.UNICORN: {"weight": 15, "max_count": 1},
+            PieceType.ZEBRA: {"weight": 15, "max_count": 1},
+            PieceType.CENTAUR: {"weight": 15, "max_count": 1},
+            PieceType.CHAMPION: {"weight": 15, "max_count": 1},
+            PieceType.WIZARD: {"weight": 15, "max_count": 1},
+            PieceType.CHANCELLOR: {"weight": 15, "max_count": 1},
+            PieceType.ARCHBISHOP: {"weight": 15, "max_count": 1},
+            PieceType.AMAZON: {"weight": 15, "max_count": 1},
+            PieceType.DRAGON: {"weight": 15, "max_count": 1},
+            PieceType.SHIP: {"weight": 15, "max_count": 1},
         }
 
         # Generate 7 random pieces for the back row, respecting max counts
