@@ -411,6 +411,8 @@ function App() {
     "Chess with Guns",
     "What the heck is a Mann?",
     "Chess for the Sickos",
+    "Wizard H4",
+    "Is there a rulebook?",
   ];
 
   const [boardState, setBoardState] = useState(null);
@@ -996,7 +998,9 @@ function App() {
       try {
         const backendUrl = import.meta.env.VITE_BACKEND_URL || "localhost:8000";
         const protocol = backendUrl.includes("localhost") ? "http" : "https";
-        const response = await fetch(`${protocol}://${backendUrl}/player_count`);
+        const response = await fetch(
+          `${protocol}://${backendUrl}/player_count`,
+        );
         const data = await response.json();
         setPlayerCount(data.player_count);
       } catch (error) {
