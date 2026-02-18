@@ -38,6 +38,7 @@ class Color(Enum):
 @dataclass
 class Position:
     """Represents a position on the chess board."""
+
     row: int  # 0-7, where 0 is rank 1 (white's back rank)
     col: int  # 0-7, where 0 is 'a' file
 
@@ -59,7 +60,7 @@ class Position:
     @staticmethod
     def from_algebraic(notation: str) -> "Position":
         """Create position from algebraic notation (e.g., 'e4')."""
-        col = ord(notation[0]) - ord('a')
+        col = ord(notation[0]) - ord("a")
         row = int(notation[1]) - 1
         return Position(row, col)
 
@@ -67,6 +68,7 @@ class Position:
 @dataclass
 class Piece:
     """Represents a chess piece."""
+
     piece_type: PieceType
     color: Color
     has_moved: bool = False
@@ -86,13 +88,15 @@ class Piece:
             (Color.BLACK, PieceType.KNIGHT): "♞",
             (Color.BLACK, PieceType.PAWN): "♟",
         }
-        return symbols.get((self.color, self.piece_type),
-                          f"{self.piece_type.value[0].upper()}")
+        return symbols.get(
+            (self.color, self.piece_type), f"{self.piece_type.value[0].upper()}"
+        )
 
 
 @dataclass
 class Move:
     """Represents a chess move."""
+
     from_pos: Position
     to_pos: Position
     piece: Piece
@@ -117,7 +121,7 @@ class ChessGame:
         self.en_passant_target: Optional[Position] = None
         self.captured_pieces: Dict[Color, List[Piece]] = {
             Color.WHITE: [],
-            Color.BLACK: []
+            Color.BLACK: [],
         }
         self._initialize_board()
 
@@ -140,45 +144,75 @@ class ChessGame:
         Generate a random board layout for the back row.
 
         The front row will always be pawns (weight 1).
-        The back row is generated with weighted random selection:
-        - Rook: weight 2
-        - Bishop: weight 2
-        - Knight: weight 2
-        - Queen: weight 1
-        - Elephant: weight 1
-        - Giraffe: weight 1
-        - Unicorn: weight 1
+        The back row is generated with weighted random selection where each piece
+        has both a weight (probability of being selected) and a maximum count.
+
+        Piece weights and max counts:
+        - Rook: weight 10, max 2
+        - Bishop: weight 5, max 2
+        - Knight: weight 5, max 2
+        - Queen: weight 3, max 1
+        - Mann: weight 2, max 2
+        - Elephant: weight 2, max 2
+        - Giraffe: weight 1, max 1
+        - Unicorn: weight 2, max 1
+        - Zebra: weight 1, max 2
+        - Centaur: weight 3, max 2
+        - Champion: weight 2, max 1
+        - Wizard: weight 2, max 1
+        - Chancellor: weight 2, max 1
+        - Archbishop: weight 2, max 1
+        - Amazon: weight 1, max 1
+        - Dragon: weight 2, max 2
+        - Ship: weight 1, max 2
         - King: must always be on the board (exactly once)
 
         Returns:
             A list of 8 PieceTypes representing the back row layout
         """
-        # Define weighted pieces (excluding King which is guaranteed)
-        weighted_pieces = [
-            PieceType.ROOK,
-            PieceType.ROOK,  # weight 2
-            PieceType.BISHOP,
-            PieceType.BISHOP,  # weight 2
-            PieceType.KNIGHT,
-            PieceType.KNIGHT,  # weight 2
-            PieceType.QUEEN,  # weight 1
-            PieceType.MANN,  # weight 1
-            PieceType.ELEPHANT,  # weight 1
-            PieceType.GIRAFFE,  # weight 1
-            PieceType.UNICORN,  # weight 1
-            PieceType.ZEBRA,  # weight 1
-            PieceType.CENTAUR,  # weight 1
-            PieceType.CHAMPION,  # weight 1
-            PieceType.WIZARD,  # weight 1
-            PieceType.CHANCELLOR,  # weight 1
-            PieceType.ARCHBISHOP,  # weight 1
-            PieceType.AMAZON,  # weight 1
-            PieceType.DRAGON,  # weight 1
-            PieceType.SHIP,  # weight 1
-        ]
+        # Define piece weights and maximum counts (excluding King which is guaranteed)
+        piece_config = {
+            PieceType.ROOK: {"weight": 12, "max_count": 2},
+            PieceType.BISHOP: {"weight": 12, "max_count": 2},
+            PieceType.KNIGHT: {"weight": 12, "max_count": 2},
+            PieceType.QUEEN: {"weight": 6, "max_count": 1},
+            PieceType.MANN: {"weight": 1, "max_count": 1},
+            PieceType.ELEPHANT: {"weight": 1, "max_count": 1},
+            PieceType.GIRAFFE: {"weight": 1, "max_count": 1},
+            PieceType.UNICORN: {"weight": 1, "max_count": 1},
+            PieceType.ZEBRA: {"weight": 1, "max_count": 1},
+            PieceType.CENTAUR: {"weight": 1, "max_count": 1},
+            PieceType.CHAMPION: {"weight": 1, "max_count": 1},
+            PieceType.WIZARD: {"weight": 1, "max_count": 1},
+            PieceType.CHANCELLOR: {"weight": 1, "max_count": 1},
+            PieceType.ARCHBISHOP: {"weight": 1, "max_count": 1},
+            PieceType.AMAZON: {"weight": 1, "max_count": 1},
+            PieceType.DRAGON: {"weight": 1, "max_count": 1},
+            PieceType.SHIP: {"weight": 1, "max_count": 1},
+        }
 
-        # Generate 7 random pieces for the back row
-        back_row_layout = random.choices(weighted_pieces, k=7)
+        # Generate 7 random pieces for the back row, respecting max counts
+        back_row_layout = []
+        piece_counts: Dict[PieceType, int] = {}
+
+        for _ in range(7):
+            # Build list of available pieces and their weights
+            available_pieces = []
+            weights = []
+
+            for piece_type, config in piece_config.items():
+                current_count = piece_counts.get(piece_type, 0)
+                if current_count < config["max_count"]:
+                    available_pieces.append(piece_type)
+                    weights.append(config["weight"])
+
+            # Select a random piece from available pieces
+            if available_pieces:
+                selected_piece = random.choices(available_pieces, weights=weights, k=1)[
+                    0
+                ]
+                back_row_layout.append(selected_piece)
+                piece_counts[selected_piece] = piece_counts.get(selected_piece, 0) + 1
 
         # Insert King at a random position
         king_position = random.randint(0, 7)
@@ -283,11 +317,15 @@ class ChessGame:
 
     def _get_rook_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
         """Get possible moves for a rook."""
-        return self._get_sliding_moves(from_pos, piece, [(0, 1), (0, -1), (1, 0), (-1, 0)])
+        return self._get_sliding_moves(
+            from_pos, piece, [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        )
 
     def _get_bishop_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
         """Get possible moves for a bishop."""
-        return self._get_sliding_moves(from_pos, piece, [(1, 1), (1, -1), (-1, 1), (-1, -1)])
+        return self._get_sliding_moves(
+            from_pos, piece, [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+        )
 
     def _get_elephant_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
         """Get possible moves for an elephant (diagonal, max 2 squares)."""
@@ -296,7 +334,9 @@ class ChessGame:
 
         for row_delta, col_delta in directions:
             for distance in range(1, 3):  # Max 2 squares
-                current_pos = from_pos.offset(row_delta * distance, col_delta * distance)
+                current_pos = from_pos.offset(
+                    row_delta * distance, col_delta * distance
+                )
                 if not current_pos.is_valid():
                     break
 
@@ -313,15 +353,30 @@ class ChessGame:
 
     def _get_queen_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
         """Get possible moves for a queen."""
-        directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+        directions = [
+            (0, 1),
+            (0, -1),
+            (1, 0),
+            (-1, 0),
+            (1, 1),
+            (1, -1),
+            (-1, 1),
+            (-1, -1),
+        ]
         return self._get_sliding_moves(from_pos, piece, directions)
 
     def _get_knight_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
         """Get possible moves for a knight."""
         moves = []
         knight_offsets = [
-            (2, 1), (2, -1), (-2, 1), (-2, -1),
-            (1, 2), (1, -2), (-1, 2), (-1, -2)
+            (2, 1),
+            (2, -1),
+            (-2, 1),
+            (-2, -1),
+            (1, 2),
+            (1, -2),
+            (-1, 2),
+            (-1, -2),
         ]
 
         for row_offset, col_offset in knight_offsets:
@@ -337,8 +392,14 @@ class ChessGame:
         """Get possible moves for a giraffe (4 squares in one direction, 1 in perpendicular)."""
         moves = []
         giraffe_offsets = [
-            (4, 1), (4, -1), (-4, 1), (-4, -1),
-            (1, 4), (1, -4), (-1, 4), (-1, -4)
+            (4, 1),
+            (4, -1),
+            (-4, 1),
+            (-4, -1),
+            (1, 4),
+            (1, -4),
+            (-1, 4),
+            (-1, -4),
         ]
 
         for row_offset, col_offset in giraffe_offsets:
@@ -354,8 +415,14 @@ class ChessGame:
         """Get possible moves for a unicorn (nightrider - sliding knight moves)."""
         moves = []
         knight_offsets = [
-            (2, 1), (2, -1), (-2, 1), (-2, -1),
-            (1, 2), (1, -2), (-1, 2), (-1, -2)
+            (2, 1),
+            (2, -1),
+            (-2, 1),
+            (-2, -1),
+            (1, 2),
+            (1, -2),
+            (-1, 2),
+            (-1, -2),
         ]
 
         for row_delta, col_delta in knight_offsets:
@@ -380,8 +447,14 @@ class ChessGame:
         """Get possible moves for a zebra ((2,3)-leaper)."""
         moves = []
         zebra_offsets = [
-            (2, 3), (2, -3), (-2, 3), (-2, -3),
-            (3, 2), (3, -2), (-3, 2), (-3, -2)
+            (2, 3),
+            (2, -3),
+            (-2, 3),
+            (-2, -3),
+            (3, 2),
+            (3, -2),
+            (-3, 2),
+            (-3, -2),
         ]
 
         for row_offset, col_offset in zebra_offsets:
@@ -399,8 +472,14 @@ class ChessGame:
 
         # Knight moves (L-shaped jumps)
         knight_offsets = [
-            (2, 1), (2, -1), (-2, 1), (-2, -1),
-            (1, 2), (1, -2), (-1, 2), (-1, -2)
+            (2, 1),
+            (2, -1),
+            (-2, 1),
+            (-2, -1),
+            (1, 2),
+            (1, -2),
+            (-1, 2),
+            (-1, -2),
         ]
 
         for row_offset, col_offset in knight_offsets:
@@ -428,9 +507,7 @@ class ChessGame:
         moves = []
 
         # Jump two squares orthogonally
-        orthogonal_jumps = [
-            (2, 0), (-2, 0), (0, 2), (0, -2)
-        ]
+        orthogonal_jumps = [(2, 0), (-2, 0), (0, 2), (0, -2)]
 
         for row_offset, col_offset in orthogonal_jumps:
             to_pos = from_pos.offset(row_offset, col_offset)
@@ -440,9 +517,7 @@ class ChessGame:
                     moves.append(to_pos)
 
         # Jump two squares diagonally
-        diagonal_jumps = [
-            (2, 2), (2, -2), (-2, 2), (-2, -2)
-        ]
+        diagonal_jumps = [(2, 2), (2, -2), (-2, 2), (-2, -2)]
 
         for row_offset, col_offset in diagonal_jumps:
             to_pos = from_pos.offset(row_offset, col_offset)
@@ -452,9 +527,7 @@ class ChessGame:
                     moves.append(to_pos)
 
         # Slide one square orthogonally (non-jumping)
-        orthogonal_slides = [
-            (1, 0), (-1, 0), (0, 1), (0, -1)
-        ]
+        orthogonal_slides = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
         for row_offset, col_offset in orthogonal_slides:
             to_pos = from_pos.offset(row_offset, col_offset)
@@ -471,8 +544,14 @@ class ChessGame:
 
         # Jump (1,3) or (3,1) squares in any direction
         wizard_jumps = [
-            (1, 3), (1, -3), (-1, 3), (-1, -3),
-            (3, 1), (3, -1), (-3, 1), (-3, -1)
+            (1, 3),
+            (1, -3),
+            (-1, 3),
+            (-1, -3),
+            (3, 1),
+            (3, -1),
+            (-3, 1),
+            (-3, -1),
         ]
 
         for row_offset, col_offset in wizard_jumps:
@@ -483,9 +562,7 @@ class ChessGame:
                     moves.append(to_pos)
 
         # Slide one square diagonally (non-jumping)
-        diagonal_slides = [
-            (1, 1), (1, -1), (-1, 1), (-1, -1)
-        ]
+        diagonal_slides = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
 
         for row_offset, col_offset in diagonal_slides:
             to_pos = from_pos.offset(row_offset, col_offset)
@@ -503,8 +580,14 @@ class ChessGame:
 
         # Knight moves (L-shaped jumps)
         knight_offsets = [
-            (2, 1), (2, -1), (-2, 1), (-2, -1),
-            (1, 2), (1, -2), (-1, 2), (-1, -2)
+            (2, 1),
+            (2, -1),
+            (-2, 1),
+            (-2, -1),
+            (1, 2),
+            (1, -2),
+            (-1, 2),
+            (-1, -2),
         ]
 
         for row_offset, col_offset in knight_offsets:
@@ -535,8 +618,14 @@ class ChessGame:
 
         # Knight moves (L-shaped jumps)
         knight_offsets = [
-            (2, 1), (2, -1), (-2, 1), (-2, -1),
-            (1, 2), (1, -2), (-1, 2), (-1, -2)
+            (2, 1),
+            (2, -1),
+            (-2, 1),
+            (-2, -1),
+            (1, 2),
+            (1, -2),
+            (-1, 2),
+            (-1, -2),
         ]
 
         for row_offset, col_offset in knight_offsets:
@@ -563,8 +652,14 @@ class ChessGame:
 
         # Knight moves (L-shaped jumps)
         knight_offsets = [
-            (2, 1), (2, -1), (-2, 1), (-2, -1),
-            (1, 2), (1, -2), (-1, 2), (-1, -2)
+            (2, 1),
+            (2, -1),
+            (-2, 1),
+            (-2, -1),
+            (1, 2),
+            (1, -2),
+            (-1, 2),
+            (-1, -2),
         ]
 
         for row_offset, col_offset in knight_offsets:
@@ -581,13 +676,28 @@ class ChessGame:
         moves = []
 
         # Queen moves (sliding in all 8 directions)
-        queen_directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+        queen_directions = [
+            (0, 1),
+            (0, -1),
+            (1, 0),
+            (-1, 0),
+            (1, 1),
+            (1, -1),
+            (-1, 1),
+            (-1, -1),
+        ]
         moves.extend(self._get_sliding_moves(from_pos, piece, queen_directions))
 
         # Knight moves (L-shaped jumps)
         knight_offsets = [
-            (2, 1), (2, -1), (-2, 1), (-2, -1),
-            (1, 2), (1, -2), (-1, 2), (-1, -2)
+            (2, 1),
+            (2, -1),
+            (-2, 1),
+            (-2, -1),
+            (1, 2),
+            (1, -2),
+            (-1, 2),
+            (-1, -2),
         ]
 
         for row_offset, col_offset in knight_offsets:
@@ -602,9 +712,7 @@ class ChessGame:
     def _get_ship_moves(self, from_pos: Position, piece: Piece) -> List[Position]:
         """Get possible moves for a ship ((2,2)-leaper - diagonal jumps of 2 squares)."""
         moves = []
-        ship_offsets = [
-            (2, 2), (2, -2), (-2, 2), (-2, -2)
-        ]
+        ship_offsets = [(2, 2), (2, -2), (-2, 2), (-2, -2)]
 
         for row_offset, col_offset in ship_offsets:
             to_pos = from_pos.offset(row_offset, col_offset)
@@ -635,31 +743,43 @@ class ChessGame:
             # Kingside castling
             kingside_rook_pos = Position(from_pos.row, 7)
             kingside_rook = self.get_piece(kingside_rook_pos)
-            if (kingside_rook and
-                kingside_rook.piece_type == PieceType.ROOK and
-                not kingside_rook.has_moved):
+            if (
+                kingside_rook
+                and kingside_rook.piece_type == PieceType.ROOK
+                and not kingside_rook.has_moved
+            ):
                 # Check if squares between king and rook are empty
-                if all(not self.get_piece(Position(from_pos.row, col))
-                       for col in range(from_pos.col + 1, 7)):
+                if all(
+                    not self.get_piece(Position(from_pos.row, col))
+                    for col in range(from_pos.col + 1, 7)
+                ):
                     # Check if king doesn't pass through check
                     squares_to_check = [from_pos.offset(0, 1), from_pos.offset(0, 2)]
-                    if all(not self._is_position_under_attack(pos, piece.color)
-                           for pos in squares_to_check):
+                    if all(
+                        not self._is_position_under_attack(pos, piece.color)
+                        for pos in squares_to_check
+                    ):
                         moves.append(from_pos.offset(0, 2))
 
             # Queenside castling
             queenside_rook_pos = Position(from_pos.row, 0)
             queenside_rook = self.get_piece(queenside_rook_pos)
-            if (queenside_rook and
-                queenside_rook.piece_type == PieceType.ROOK and
-                not queenside_rook.has_moved):
+            if (
+                queenside_rook
+                and queenside_rook.piece_type == PieceType.ROOK
+                and not queenside_rook.has_moved
+            ):
                 # Check if squares between king and rook are empty
-                if all(not self.get_piece(Position(from_pos.row, col))
-                       for col in range(1, from_pos.col)):
+                if all(
+                    not self.get_piece(Position(from_pos.row, col))
+                    for col in range(1, from_pos.col)
+                ):
                     # Check if king doesn't pass through check
                     squares_to_check = [from_pos.offset(0, -1), from_pos.offset(0, -2)]
-                    if all(not self._is_position_under_attack(pos, piece.color)
-                           for pos in squares_to_check):
+                    if all(
+                        not self._is_position_under_attack(pos, piece.color)
+                        for pos in squares_to_check
+                    ):
                         moves.append(from_pos.offset(0, -2))
 
         return moves
@@ -682,10 +802,7 @@ class ChessGame:
         return moves
 
     def _get_sliding_moves(
-        self,
-        from_pos: Position,
-        piece: Piece,
-        directions: List[Tuple[int, int]]
+        self, from_pos: Position, piece: Piece, directions: List[Tuple[int, int]]
     ) -> List[Position]:
         """
         Get moves for sliding pieces (rook, bishop, queen).
@@ -738,9 +855,11 @@ class ChessGame:
             return
 
         # Handle en passant capture
-        if (piece.piece_type == PieceType.PAWN and
-            to_pos == self.en_passant_target and
-            self.en_passant_target is not None):
+        if (
+            piece.piece_type == PieceType.PAWN
+            and to_pos == self.en_passant_target
+            and self.en_passant_target is not None
+        ):
             # Remove the captured pawn
             direction = 1 if piece.color == Color.WHITE else -1
             captured_pawn_pos = to_pos.offset(-direction, 0)
@@ -772,7 +891,7 @@ class ChessGame:
         self,
         from_pos: Position,
         to_pos: Position,
-        promotion_piece_type: Optional[PieceType] = None
+        promotion_piece_type: Optional[PieceType] = None,
     ) -> bool:
         """
         Make a move on the board.
@@ -790,11 +909,14 @@ class ChessGame:
 
         # Create move record
         captured_piece = self.get_piece(to_pos)
-        is_castling = (piece.piece_type == PieceType.KING and
-                      abs(to_pos.col - from_pos.col) == 2)
-        is_en_passant = (piece.piece_type == PieceType.PAWN and
-                        to_pos == self.en_passant_target and
-                        self.en_passant_target is not None)
+        is_castling = (
+            piece.piece_type == PieceType.KING and abs(to_pos.col - from_pos.col) == 2
+        )
+        is_en_passant = (
+            piece.piece_type == PieceType.PAWN
+            and to_pos == self.en_passant_target
+            and self.en_passant_target is not None
+        )
 
         if is_en_passant:
             direction = 1 if piece.color == Color.WHITE else -1
@@ -808,7 +930,7 @@ class ChessGame:
             captured_piece=captured_piece,
             is_castling=is_castling,
             is_en_passant=is_en_passant,
-            promotion_piece_type=promotion_piece_type
+            promotion_piece_type=promotion_piece_type,
         )
 
         # Execute the move
@@ -820,7 +942,9 @@ class ChessGame:
             if to_pos.row == promotion_row:
                 if promotion_piece_type is None:
                     promotion_piece_type = PieceType.QUEEN
-                self.board[to_pos] = Piece(promotion_piece_type, piece.color, has_moved=True)
+                self.board[to_pos] = Piece(
+                    promotion_piece_type, piece.color, has_moved=True
+                )
 
         # Update en passant target
         self.en_passant_target = None
@@ -914,7 +1038,9 @@ class ChessGame:
 
         return False
 
-    def _get_pawn_attacking_squares(self, from_pos: Position, piece: Piece) -> List[Position]:
+    def _get_pawn_attacking_squares(
+        self, from_pos: Position, piece: Piece
+    ) -> List[Position]:
         """Get squares that a pawn is attacking (diagonal squares only)."""
         direction = 1 if piece.color == Color.WHITE else -1
         attacking_squares = []
@@ -926,7 +1052,9 @@ class ChessGame:
 
         return attacking_squares
 
-    def _get_king_attacking_squares(self, from_pos: Position, piece: Piece) -> List[Position]:
+    def _get_king_attacking_squares(
+        self, from_pos: Position, piece: Piece
+    ) -> List[Position]:
         """Get squares that a king is attacking (all adjacent squares)."""
         attacking_squares = []
 
