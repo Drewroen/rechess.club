@@ -1154,6 +1154,20 @@ class ChessGame:
         position_key = self._get_position_key()
         return self.position_history.get(position_key, 0) >= 3
 
+    def is_insufficient_material(self) -> bool:
+        """Check if the game is a draw due to insufficient material (only kings remaining)."""
+        # Count all pieces on the board
+        piece_count = len(self.board)
+
+        # If only 2 pieces remain, check if they are both kings
+        if piece_count == 2:
+            for piece in self.board.values():
+                if piece.piece_type != PieceType.KING:
+                    return False
+            return True
+
+        return False
+
     def is_game_over(self) -> bool:
         """Check if the game is over."""
         return (
@@ -1161,6 +1175,7 @@ class ChessGame:
             or self.is_stalemate()
             or self.is_fifty_move_draw()
             or self.is_threefold_repetition()
+            or self.is_insufficient_material()
         )
 
     def get_game_result(self) -> Optional[str]:
@@ -1174,6 +1189,8 @@ class ChessGame:
             return "Draw by fifty-move rule"
         elif self.is_threefold_repetition():
             return "Draw by threefold repetition"
+        elif self.is_insufficient_material():
+            return "Draw by insufficient material"
         return None
 
     def display_board(self) -> str:
