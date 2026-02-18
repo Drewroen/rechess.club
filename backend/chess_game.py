@@ -150,57 +150,63 @@ class ChessGame:
         Generate a random board layout for the back row.
 
         The front row will always be pawns (weight 1).
-        The back row is generated with weighted random selection where each piece
-        has both a weight (probability of being selected) and a maximum count.
+        The back row always contains exactly 1, 2, or 3 fairy pieces:
+          - 2 fairy pieces: ~66% of the time (weight 4)
+          - 1 fairy piece:  ~17% of the time (weight 1)
+          - 3 fairy pieces: ~17% of the time (weight 1)
+        The remaining slots are filled with standard pieces (rook, bishop,
+        knight, queen) using weighted random selection with maximum counts.
 
         Returns:
             A list of 8 PieceTypes representing the back row layout
         """
-        # Define piece weights and maximum counts (excluding King which is guaranteed)
-        piece_config = {
+        # All available fairy piece types
+        all_fairy_pieces = [
+            PieceType.MANN, PieceType.ELEPHANT, PieceType.GIRAFFE,
+            PieceType.UNICORN, PieceType.ZEBRA, PieceType.CENTAUR,
+            PieceType.CHAMPION, PieceType.WIZARD, PieceType.CHANCELLOR,
+            PieceType.ARCHBISHOP, PieceType.AMAZON, PieceType.DRAGON,
+            PieceType.SHIP,
+        ]
+
+        # Standard piece weights and maximum counts
+        standard_piece_config = {
             PieceType.ROOK: {"weight": 120, "max_count": 2},
             PieceType.BISHOP: {"weight": 120, "max_count": 2},
             PieceType.KNIGHT: {"weight": 120, "max_count": 2},
             PieceType.QUEEN: {"weight": 60, "max_count": 1},
-            PieceType.MANN: {"weight": 15, "max_count": 1},
-            PieceType.ELEPHANT: {"weight": 15, "max_count": 1},
-            PieceType.GIRAFFE: {"weight": 15, "max_count": 1},
-            PieceType.UNICORN: {"weight": 15, "max_count": 1},
-            PieceType.ZEBRA: {"weight": 15, "max_count": 1},
-            PieceType.CENTAUR: {"weight": 15, "max_count": 1},
-            PieceType.CHAMPION: {"weight": 15, "max_count": 1},
-            PieceType.WIZARD: {"weight": 15, "max_count": 1},
-            PieceType.CHANCELLOR: {"weight": 15, "max_count": 1},
-            PieceType.ARCHBISHOP: {"weight": 15, "max_count": 1},
-            PieceType.AMAZON: {"weight": 15, "max_count": 1},
-            PieceType.DRAGON: {"weight": 15, "max_count": 1},
-            PieceType.SHIP: {"weight": 15, "max_count": 1},
         }
 
-        # Generate 7 random pieces for the back row, respecting max counts
-        back_row_layout = []
-        piece_counts: Dict[PieceType, int] = {}
+        # Determine how many fairy pieces to include:
+        # weights [1, 4, 1] give ~17% / ~66% / ~17% for counts 1 / 2 / 3
+        fairy_count = random.choices([1, 2, 3], weights=[1, 4, 1], k=1)[0]
 
-        for _ in range(7):
-            # Build list of available pieces and their weights
+        # Select distinct fairy pieces without replacement
+        selected_fairy_pieces = random.sample(all_fairy_pieces, fairy_count)
+
+        # Fill remaining slots with standard pieces using weighted selection
+        standard_pieces = []
+        standard_counts: Dict[PieceType, int] = {}
+        remaining_slots = 7 - fairy_count
+
+        for _ in range(remaining_slots):
             available_pieces = []
             weights = []
 
-            for piece_type, config in piece_config.items():
-                current_count = piece_counts.get(piece_type, 0)
-                if current_count < config["max_count"]:
+            for piece_type, config in standard_piece_config.items():
+                if standard_counts.get(piece_type, 0) < config["max_count"]:
                     available_pieces.append(piece_type)
                     weights.append(config["weight"])
 
-            # Select a random piece from available pieces
             if available_pieces:
-                selected_piece = random.choices(available_pieces, weights=weights, k=1)[
-                    0
-                ]
-                back_row_layout.append(selected_piece)
-                piece_counts[selected_piece] = piece_counts.get(selected_piece, 0) + 1
+                selected_piece = random.choices(available_pieces, weights=weights, k=1)[0]
+                standard_pieces.append(selected_piece)
+                standard_counts[selected_piece] = standard_counts.get(selected_piece, 0) + 1
 
-        # Insert King at a random position
+        # Combine fairy and standard pieces, shuffle, then insert King
+        back_row_layout = selected_fairy_pieces + standard_pieces
+        random.shuffle(back_row_layout)
+
         king_position = random.randint(0, 7)
         back_row_layout.insert(king_position, PieceType.KING)
 
