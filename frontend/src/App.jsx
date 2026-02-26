@@ -1471,6 +1471,41 @@ function App() {
         padding: "0",
       }}
     >
+      {/* Help button - always visible */}
+      <button
+        onClick={() => setShowHelpModal(true)}
+        style={{
+          position: "fixed",
+          top: "2rem",
+          right: "2rem",
+          width: "48px",
+          height: "48px",
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #4a4a4a 0%, #6a6a6a 100%)",
+          color: "white",
+          border: "none",
+          fontSize: "1.5rem",
+          fontWeight: "600",
+          cursor: "pointer",
+          transition: "transform 0.2s, box-shadow 0.2s",
+          boxShadow: "0 4px 12px rgba(74, 74, 74, 0.3)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 100,
+        }}
+        onMouseOver={(e) => {
+          e.target.style.transform = "scale(1.05)";
+          e.target.style.boxShadow = "0 6px 16px rgba(74, 74, 74, 0.4)";
+        }}
+        onMouseOut={(e) => {
+          e.target.style.transform = "scale(1)";
+          e.target.style.boxShadow = "0 4px 12px rgba(74, 74, 74, 0.3)";
+        }}
+      >
+        ?
+      </button>
+
       {gameState === "landing" && (
         <div
           style={{
@@ -1481,39 +1516,6 @@ function App() {
             position: "relative",
           }}
         >
-          {/* Help button */}
-          <button
-            onClick={() => setShowHelpModal(true)}
-            style={{
-              position: "fixed",
-              top: "2rem",
-              right: "2rem",
-              width: "48px",
-              height: "48px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #4a4a4a 0%, #6a6a6a 100%)",
-              color: "white",
-              border: "none",
-              fontSize: "1.5rem",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "transform 0.2s, box-shadow 0.2s",
-              boxShadow: "0 4px 12px rgba(74, 74, 74, 0.3)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            onMouseOver={(e) => {
-              e.target.style.transform = "scale(1.05)";
-              e.target.style.boxShadow = "0 6px 16px rgba(74, 74, 74, 0.4)";
-            }}
-            onMouseOut={(e) => {
-              e.target.style.transform = "scale(1)";
-              e.target.style.boxShadow = "0 4px 12px rgba(74, 74, 74, 0.3)";
-            }}
-          >
-            ?
-          </button>
 
           <h1
             style={{
@@ -1640,310 +1642,6 @@ function App() {
             >
               {playerCount} {playerCount === 1 ? "person" : "people"} currently
               playing!
-            </div>
-          )}
-
-          {/* Help modal */}
-          {showHelpModal && (
-            <div
-              onClick={() => setShowHelpModal(false)}
-              style={{
-                position: "fixed",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                background: "rgba(0, 0, 0, 0.85)",
-                zIndex: 1000,
-              }}
-            >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  background:
-                    "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)",
-                  padding: "2rem",
-                  borderRadius: "8px",
-                  maxWidth: "500px",
-                  width: "90%",
-                  fontFamily:
-                    "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
-                  border: "1px solid #4a4a4a",
-                }}
-              >
-                <h2
-                  style={{
-                    fontSize: "1.75rem",
-                    fontWeight: "700",
-                    marginTop: "0",
-                    marginBottom: "1rem",
-                    color: "white",
-                  }}
-                >
-                  {getPieceInfo(selectedPieceType).name}
-                </h2>
-                <p
-                  style={{
-                    fontSize: "1rem",
-                    lineHeight: "1.6",
-                    color: "#cccccc",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  {getPieceInfo(selectedPieceType).description}
-                </p>
-
-                {/* Demo chess board */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "1rem",
-                  }}
-                >
-                  <svg
-                    width={9 * 50}
-                    height={9 * 50}
-                    viewBox={`0 0 ${9 * 50} ${9 * 50}`}
-                    style={{
-                      border: "2px solid #2d2d2d",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    {/* Render checkered board pattern */}
-                    {Array.from({ length: 9 }).map((_, row) =>
-                      Array.from({ length: 9 }).map((_, col) => {
-                        const isLightSquare = (row + col) % 2 === 0;
-                        const fillColor = isLightSquare ? "#e8eaec" : "#798495";
-                        return (
-                          <rect
-                            key={`${row}-${col}`}
-                            x={col * 50}
-                            y={row * 50}
-                            width={50}
-                            height={50}
-                            fill={fillColor}
-                          />
-                        );
-                      }),
-                    )}
-
-                    {/* Render move indicators for selected piece */}
-                    {getValidMovesForPieceType(selectedPieceType).map(
-                      (move, idx) => (
-                        <foreignObject
-                          key={`move-${idx}`}
-                          x={move.col * 50}
-                          y={move.row * 50}
-                          width={50}
-                          height={50}
-                        >
-                          <div
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              background:
-                                "radial-gradient(rgba(20, 85, 30, 0.5) 19%, rgba(0, 0, 0, 0) calc(20% + 1px))",
-                            }}
-                          />
-                        </foreignObject>
-                      ),
-                    )}
-
-                    {/* Render selected piece in center (position 4,4) */}
-                    <image
-                      href={getPieceSvgPath(selectedPieceType, "white")}
-                      x={4 * 50}
-                      y={4 * 50}
-                      width={50}
-                      height={50}
-                    />
-                  </svg>
-
-                  {/* Piece selector */}
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "0.5rem",
-                      alignItems: "center",
-                    }}
-                  >
-                    {/* Row 1: Normal chess pieces */}
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      {[
-                        "pawn",
-                        "knight",
-                        "bishop",
-                        "rook",
-                        "queen",
-                        "king",
-                      ].map((pieceType) => (
-                        <button
-                          key={pieceType}
-                          onClick={() => setSelectedPieceType(pieceType)}
-                          style={{
-                            background:
-                              selectedPieceType === pieceType
-                                ? "#4a4a4a"
-                                : "#2d2d2d",
-                            border:
-                              selectedPieceType === pieceType
-                                ? "2px solid #6a6a6a"
-                                : "2px solid #3a3a3a",
-                            borderRadius: "4px",
-                            padding: "0.5rem",
-                            cursor: "pointer",
-                            transition: "all 0.2s",
-                            width: "50px",
-                            height: "50px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                          onMouseOver={(e) => {
-                            if (selectedPieceType !== pieceType) {
-                              e.currentTarget.style.background = "#3a3a3a";
-                            }
-                          }}
-                          onMouseOut={(e) => {
-                            if (selectedPieceType !== pieceType) {
-                              e.currentTarget.style.background = "#2d2d2d";
-                            }
-                          }}
-                        >
-                          <img
-                            src={getPieceSvgPath(pieceType, "white")}
-                            alt={pieceType}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              pointerEvents: "none",
-                            }}
-                          />
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Row 2: Knight-like and mixed pieces */}
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      {[
-                        "giraffe",
-                        "zebra",
-                        "unicorn",
-                        "centaur",
-                        "archbishop",
-                        "chancellor",
-                        "amazon",
-                      ].map((pieceType) => (
-                        <button
-                          key={pieceType}
-                          onClick={() => setSelectedPieceType(pieceType)}
-                          style={{
-                            background:
-                              selectedPieceType === pieceType
-                                ? "#4a4a4a"
-                                : "#2d2d2d",
-                            border:
-                              selectedPieceType === pieceType
-                                ? "2px solid #6a6a6a"
-                                : "2px solid #3a3a3a",
-                            borderRadius: "4px",
-                            padding: "0.5rem",
-                            cursor: "pointer",
-                            transition: "all 0.2s",
-                            width: "50px",
-                            height: "50px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                          onMouseOver={(e) => {
-                            if (selectedPieceType !== pieceType) {
-                              e.currentTarget.style.background = "#3a3a3a";
-                            }
-                          }}
-                          onMouseOut={(e) => {
-                            if (selectedPieceType !== pieceType) {
-                              e.currentTarget.style.background = "#2d2d2d";
-                            }
-                          }}
-                        >
-                          <img
-                            src={getPieceSvgPath(pieceType, "white")}
-                            alt={pieceType}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              pointerEvents: "none",
-                            }}
-                          />
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Row 3: Misc */}
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      {[
-                        "mann",
-                        "champion",
-                        "wizard",
-                        "dragon",
-                        "elephant",
-                        "ship",
-                      ].map((pieceType) => (
-                        <button
-                          key={pieceType}
-                          onClick={() => setSelectedPieceType(pieceType)}
-                          style={{
-                            background:
-                              selectedPieceType === pieceType
-                                ? "#4a4a4a"
-                                : "#2d2d2d",
-                            border:
-                              selectedPieceType === pieceType
-                                ? "2px solid #6a6a6a"
-                                : "2px solid #3a3a3a",
-                            borderRadius: "4px",
-                            padding: "0.5rem",
-                            cursor: "pointer",
-                            transition: "all 0.2s",
-                            width: "50px",
-                            height: "50px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                          onMouseOver={(e) => {
-                            if (selectedPieceType !== pieceType) {
-                              e.currentTarget.style.background = "#3a3a3a";
-                            }
-                          }}
-                          onMouseOut={(e) => {
-                            if (selectedPieceType !== pieceType) {
-                              e.currentTarget.style.background = "#2d2d2d";
-                            }
-                          }}
-                        >
-                          <img
-                            src={getPieceSvgPath(pieceType, "white")}
-                            alt={pieceType}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              pointerEvents: "none",
-                            }}
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
         </div>
@@ -2287,6 +1985,308 @@ function App() {
           )}
         </div>
       )}
+
+      {/* Help modal - available in all game states */}
+      {showHelpModal && (() => {
+        // Get unique piece types from the current board if in a game
+        const piecesInGame = gameState === "playing" && boardState
+          ? [...new Set(Object.values(boardState.board).map(piece => piece.piece_type))]
+          : null;
+
+        // Define all piece groups for landing page
+        const allPieceGroups = [
+          ["pawn", "knight", "bishop", "rook", "queen", "king"],
+          ["giraffe", "zebra", "unicorn", "centaur", "archbishop", "chancellor", "amazon"],
+          ["mann", "champion", "wizard", "dragon", "elephant", "ship"],
+        ];
+
+        // Define all pieces in order for in-game
+        const allPieces = [
+          "pawn", "knight", "bishop", "rook", "queen", "king",
+          "giraffe", "zebra", "unicorn", "centaur", "archbishop", "chancellor", "amazon",
+          "mann", "champion", "wizard", "dragon", "elephant", "ship",
+        ];
+
+        // Filter to only show pieces in the game (if playing)
+        const piecesToShow = piecesInGame
+          ? allPieces.filter(piece => piecesInGame.includes(piece))
+          : null;
+
+        return (
+          <div
+            onClick={() => setShowHelpModal(false)}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              background: "rgba(0, 0, 0, 0.85)",
+              zIndex: 1000,
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background:
+                  "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)",
+                padding: "2rem",
+                borderRadius: "8px",
+                maxWidth: "500px",
+                width: "90%",
+                fontFamily:
+                  "'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif",
+                border: "1px solid #4a4a4a",
+                position: "relative",
+              }}
+            >
+              {/* Close button */}
+              <button
+                onClick={() => setShowHelpModal(false)}
+                style={{
+                  position: "absolute",
+                  top: "1rem",
+                  right: "1rem",
+                  background: "transparent",
+                  border: "none",
+                  color: "#888888",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  padding: "0",
+                  width: "24px",
+                  height: "24px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "color 0.2s",
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.color = "#ffffff";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.color = "#888888";
+                }}
+              >
+                ×
+              </button>
+
+              <h2
+                style={{
+                  fontSize: "1.75rem",
+                  fontWeight: "700",
+                  marginTop: "0",
+                  marginBottom: "1rem",
+                  color: "white",
+                }}
+              >
+                {getPieceInfo(selectedPieceType).name}
+              </h2>
+              <p
+                style={{
+                  fontSize: "1rem",
+                  lineHeight: "1.6",
+                  color: "#cccccc",
+                  marginBottom: "1rem",
+                }}
+              >
+                {getPieceInfo(selectedPieceType).description}
+              </p>
+
+              {/* Demo chess board */}
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "1rem",
+                }}
+              >
+                <svg
+                  width={9 * 50}
+                  height={9 * 50}
+                  viewBox={`0 0 ${9 * 50} ${9 * 50}`}
+                  style={{
+                    border: "2px solid #2d2d2d",
+                    borderRadius: "4px",
+                  }}
+                >
+                  {/* Render checkered board pattern */}
+                  {Array.from({ length: 9 }).map((_, row) =>
+                    Array.from({ length: 9 }).map((_, col) => {
+                      const isLightSquare = (row + col) % 2 === 0;
+                      const fillColor = isLightSquare ? "#e8eaec" : "#798495";
+                      return (
+                        <rect
+                          key={`${row}-${col}`}
+                          x={col * 50}
+                          y={row * 50}
+                          width={50}
+                          height={50}
+                          fill={fillColor}
+                        />
+                      );
+                    }),
+                  )}
+
+                  {/* Render move indicators for selected piece */}
+                  {getValidMovesForPieceType(selectedPieceType).map(
+                    (move, idx) => (
+                      <foreignObject
+                        key={`move-${idx}`}
+                        x={move.col * 50}
+                        y={move.row * 50}
+                        width={50}
+                        height={50}
+                      >
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            background:
+                              "radial-gradient(rgba(20, 85, 30, 0.5) 19%, rgba(0, 0, 0, 0) calc(20% + 1px))",
+                          }}
+                        />
+                      </foreignObject>
+                    ),
+                  )}
+
+                  {/* Render selected piece in center (position 4,4) */}
+                  <image
+                    href={getPieceSvgPath(selectedPieceType, "white")}
+                    x={4 * 50}
+                    y={4 * 50}
+                    width={50}
+                    height={50}
+                  />
+                </svg>
+
+                {/* Piece selector */}
+                {piecesToShow ? (
+                  // In-game: single row with wrapping
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {piecesToShow.map((pieceType) => (
+                      <button
+                        key={pieceType}
+                        onClick={() => setSelectedPieceType(pieceType)}
+                        style={{
+                          background:
+                            selectedPieceType === pieceType
+                              ? "#4a4a4a"
+                              : "#2d2d2d",
+                          border:
+                            selectedPieceType === pieceType
+                              ? "2px solid #6a6a6a"
+                              : "2px solid #3a3a3a",
+                          borderRadius: "4px",
+                          padding: "0.5rem",
+                          cursor: "pointer",
+                          transition: "all 0.2s",
+                          width: "50px",
+                          height: "50px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        onMouseOver={(e) => {
+                          if (selectedPieceType !== pieceType) {
+                            e.currentTarget.style.background = "#3a3a3a";
+                          }
+                        }}
+                        onMouseOut={(e) => {
+                          if (selectedPieceType !== pieceType) {
+                            e.currentTarget.style.background = "#2d2d2d";
+                          }
+                        }}
+                      >
+                        <img
+                          src={getPieceSvgPath(pieceType, "white")}
+                          alt={pieceType}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            pointerEvents: "none",
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  // Landing page: three rows
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.5rem",
+                      alignItems: "center",
+                    }}
+                  >
+                    {allPieceGroups.map((group, groupIndex) => (
+                      <div key={groupIndex} style={{ display: "flex", gap: "0.5rem" }}>
+                        {group.map((pieceType) => (
+                          <button
+                            key={pieceType}
+                            onClick={() => setSelectedPieceType(pieceType)}
+                            style={{
+                              background:
+                                selectedPieceType === pieceType
+                                  ? "#4a4a4a"
+                                  : "#2d2d2d",
+                              border:
+                                selectedPieceType === pieceType
+                                  ? "2px solid #6a6a6a"
+                                  : "2px solid #3a3a3a",
+                              borderRadius: "4px",
+                              padding: "0.5rem",
+                              cursor: "pointer",
+                              transition: "all 0.2s",
+                              width: "50px",
+                              height: "50px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                            onMouseOver={(e) => {
+                              if (selectedPieceType !== pieceType) {
+                                e.currentTarget.style.background = "#3a3a3a";
+                              }
+                            }}
+                            onMouseOut={(e) => {
+                              if (selectedPieceType !== pieceType) {
+                                e.currentTarget.style.background = "#2d2d2d";
+                              }
+                            }}
+                          >
+                            <img
+                              src={getPieceSvgPath(pieceType, "white")}
+                              alt={pieceType}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                pointerEvents: "none",
+                              }}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
