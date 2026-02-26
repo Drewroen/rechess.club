@@ -1460,6 +1460,28 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    // When help modal opens, default to first piece in the list
+    if (showHelpModal) {
+      if (gameState === "playing" && boardState) {
+        // Get first piece from the current board
+        const piecesInGame = [...new Set(Object.values(boardState.board).map(piece => piece.piece_type))];
+        const allPieces = [
+          "pawn", "knight", "bishop", "rook", "queen", "king",
+          "giraffe", "zebra", "unicorn", "centaur", "archbishop", "chancellor", "amazon",
+          "mann", "champion", "wizard", "dragon", "elephant", "ship",
+        ];
+        const firstPiece = allPieces.find(piece => piecesInGame.includes(piece));
+        if (firstPiece) {
+          setSelectedPieceType(firstPiece);
+        }
+      } else {
+        // Default to pawn on landing page
+        setSelectedPieceType("pawn");
+      }
+    }
+  }, [showHelpModal, gameState, boardState]);
+
   return (
     <div
       style={{
