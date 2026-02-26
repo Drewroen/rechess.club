@@ -2080,6 +2080,7 @@ function App() {
                   marginTop: "0",
                   marginBottom: "1rem",
                   color: "white",
+                  textAlign: "center",
                 }}
               >
                 {getPieceInfo(selectedPieceType).name}
@@ -2090,6 +2091,9 @@ function App() {
                   lineHeight: "1.6",
                   color: "#cccccc",
                   marginBottom: "1rem",
+                  textAlign: "center",
+                  height: "3.2rem",
+                  overflow: "hidden",
                 }}
               >
                 {getPieceInfo(selectedPieceType).description}
